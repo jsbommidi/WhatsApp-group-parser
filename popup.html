@@ -56,6 +56,11 @@
                         <div class="text-filter-group">
                             <label for="textFilter">Text filtering with conditionals:</label>
                             <input type="text" id="textFilter" placeholder="meeting AND project OR deadline" class="text-filter-input">
+                            <div class="number-filter-group" id="numberFilterGroup" style="display: none;">
+                                <label for="numberFilter">AND also contains number:</label>
+                                <input type="number" id="numberFilter" placeholder="123" class="number-filter-input" min="0" step="any">
+                                <small>This will be added as AND condition to your text query</small>
+                            </div>
                             <div class="filter-mode">
                                 <label>
                                     <input type="radio" name="textMode" value="simple" checked> Simple (comma separated)
@@ -73,8 +78,9 @@
                                     • <code>meeting AND project</code> - both words must be present<br>
                                     • <code>urgent OR important</code> - either word can be present<br>
                                     • <code>meeting AND (urgent OR important)</code> - meeting + either urgent or important<br>
-                                    • <code>"exact phrase" AND keyword</code> - exact phrase + keyword<br>
-                                    • <code>NOT spam</code> - excludes messages with "spam"
+                                    • <code>"project status" AND urgent</code> - exact phrase + keyword (use quotes for phrases)<br>
+                                    • <code>NOT spam</code> - excludes messages with "spam"<br>
+                                    <strong>Note:</strong> Use quotes around words that should be treated as a single phrase
                                 </div>
                             </div>
                         </div>

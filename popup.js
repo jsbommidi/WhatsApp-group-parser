@@ -379,14 +379,17 @@ class PopupController {
     const helpSimple = document.querySelector('.help-simple');
     const helpAdvanced = document.querySelector('.help-advanced');
     const textInput = document.getElementById('textFilter');
+    const numberFilterGroup = document.getElementById('numberFilterGroup');
     
     if (mode === 'advanced') {
       helpSimple.style.display = 'none';
       helpAdvanced.style.display = 'block';
+      numberFilterGroup.style.display = 'block';
       textInput.placeholder = 'meeting AND project OR deadline';
     } else {
       helpSimple.style.display = 'block';
       helpAdvanced.style.display = 'none';
+      numberFilterGroup.style.display = 'none';
       textInput.placeholder = 'word1, word2, phrase';
     }
   }
@@ -426,6 +429,7 @@ class PopupController {
 
     // Get filter values
     const textFilter = document.getElementById('textFilter').value.trim();
+    const numberFilter = document.getElementById('numberFilter').value.trim();
     const textMode = document.querySelector('input[name="textMode"]:checked').value;
     const timeFilterEnabled = document.getElementById('enableTimeFilter').checked;
     
@@ -452,6 +456,7 @@ class PopupController {
     this.currentFilters = {
       enabled: true,
       textFilter: textFilter,
+      numberFilter: numberFilter,
       textMode: textMode,
       timeFilter: timeFilterEnabled,
       startDate: startDate,
@@ -476,6 +481,7 @@ class PopupController {
   clearFilters() {
     // Reset filter inputs
     document.getElementById('textFilter').value = '';
+    document.getElementById('numberFilter').value = '';
     document.querySelector('input[name="textMode"][value="simple"]').checked = true;
     this.toggleFilterHelp('simple');
     document.getElementById('enableTimeFilter').checked = false;
@@ -494,6 +500,7 @@ class PopupController {
     this.currentFilters = {
       enabled: document.getElementById('enableFilters').checked,
       textFilter: '',
+      numberFilter: '',
       textMode: 'simple',
       timeFilter: false,
       startDate: null,
@@ -532,14 +539,24 @@ class PopupController {
   }
 
   applyTextFilter(messages, textFilter, mode) {
-    if (!textFilter.trim()) {
+    // Combine text filter with number filter if in advanced mode
+    let combinedFilter = textFilter;
+    if (mode === 'advanced' && this.currentFilters.numberFilter) {
+      if (combinedFilter.trim()) {
+        combinedFilter = `(${combinedFilter}) AND ${this.currentFilters.numberFilter}`;
+      } else {
+        combinedFilter = this.currentFilters.numberFilter;
+      }
+    }
+
+    if (!combinedFilter.trim()) {
       return messages;
     }
 
     if (mode === 'simple') {
-      return this.applySimpleTextFilter(messages, textFilter);
+      return this.applySimpleTextFilter(messages, combinedFilter);
     } else {
-      return this.applyAdvancedTextFilter(messages, textFilter);
+      return this.applyAdvancedTextFilter(messages, combinedFilter);
     }
   }
 
@@ -788,6 +805,10 @@ class PopupController {
         
         if (settings.textFilter) {
           document.getElementById('textFilter').value = settings.textFilter;
+        }
+        
+        if (settings.numberFilter) {
+          document.getElementById('numberFilter').value = settings.numberFilter;
         }
         
         if (settings.textMode) {
