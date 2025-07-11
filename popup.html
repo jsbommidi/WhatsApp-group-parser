@@ -54,18 +54,28 @@
 
                     <div id="filterOptions" class="filter-options" style="display: none;">
                         <div class="text-filter-group">
-                            <label for="textFilter">Text contains (separate with commas):</label>
-                            <input type="text" id="textFilter" placeholder="word1, word2, phrase" class="text-filter-input">
+                            <label for="textFilter">Text filtering with conditionals:</label>
+                            <input type="text" id="textFilter" placeholder="meeting AND project OR deadline" class="text-filter-input">
                             <div class="filter-mode">
                                 <label>
-                                    <input type="radio" name="textMode" value="any" checked> Any word
+                                    <input type="radio" name="textMode" value="simple" checked> Simple (comma separated)
                                 </label>
                                 <label>
-                                    <input type="radio" name="textMode" value="all"> All words
+                                    <input type="radio" name="textMode" value="advanced"> Advanced (AND/OR logic)
                                 </label>
-                                <label>
-                                    <input type="radio" name="textMode" value="exact"> Exact phrase
-                                </label>
+                            </div>
+                            <div class="filter-help" id="filterHelp">
+                                <div class="help-simple">
+                                    <strong>Simple mode:</strong> word1, word2, phrase (finds any of these)
+                                </div>
+                                <div class="help-advanced" style="display: none;">
+                                    <strong>Advanced mode examples:</strong><br>
+                                    • <code>meeting AND project</code> - both words must be present<br>
+                                    • <code>urgent OR important</code> - either word can be present<br>
+                                    • <code>meeting AND (urgent OR important)</code> - meeting + either urgent or important<br>
+                                    • <code>"exact phrase" AND keyword</code> - exact phrase + keyword<br>
+                                    • <code>NOT spam</code> - excludes messages with "spam"
+                                </div>
                             </div>
                         </div>
 

@@ -47,6 +47,11 @@ class PopupController {
       btn.addEventListener('click', (e) => this.setQuickTimeFilter(e.target.dataset.hours));
     });
 
+    // Text mode change handler
+    document.querySelectorAll('input[name="textMode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => this.toggleFilterHelp(e.target.value));
+    });
+
     // Export buttons
     document.getElementById('exportJSON').addEventListener('click', () => this.exportJSON());
     document.getElementById('exportCSV').addEventListener('click', () => this.exportCSV());
@@ -370,6 +375,22 @@ class PopupController {
     }
   }
 
+  toggleFilterHelp(mode) {
+    const helpSimple = document.querySelector('.help-simple');
+    const helpAdvanced = document.querySelector('.help-advanced');
+    const textInput = document.getElementById('textFilter');
+    
+    if (mode === 'advanced') {
+      helpSimple.style.display = 'none';
+      helpAdvanced.style.display = 'block';
+      textInput.placeholder = 'meeting AND project OR deadline';
+    } else {
+      helpSimple.style.display = 'block';
+      helpAdvanced.style.display = 'none';
+      textInput.placeholder = 'word1, word2, phrase';
+    }
+  }
+
   toggleTimeFilterOptions(enabled) {
     const timeFilterOptions = document.getElementById('timeFilterOptions');
     timeFilterOptions.style.display = enabled ? 'block' : 'none';
@@ -451,7 +472,8 @@ class PopupController {
   clearFilters() {
     // Reset filter inputs
     document.getElementById('textFilter').value = '';
-    document.querySelector('input[name="textMode"][value="any"]').checked = true;
+    document.querySelector('input[name="textMode"][value="simple"]').checked = true;
+    this.toggleFilterHelp('simple');
     document.getElementById('enableTimeFilter').checked = false;
     document.getElementById('startDate').value = '';
     document.getElementById('startTime').value = '';
@@ -506,6 +528,18 @@ class PopupController {
   }
 
   applyTextFilter(messages, textFilter, mode) {
+    if (!textFilter.trim()) {
+      return messages;
+    }
+
+    if (mode === 'simple') {
+      return this.applySimpleTextFilter(messages, textFilter);
+    } else {
+      return this.applyAdvancedTextFilter(messages, textFilter);
+    }
+  }
+
+  applySimpleTextFilter(messages, textFilter) {
     const searchTerms = textFilter.toLowerCase().split(',').map(term => term.trim()).filter(term => term);
     
     if (searchTerms.length === 0) {
@@ -514,18 +548,95 @@ class PopupController {
 
     return messages.filter(message => {
       const messageText = message.text.toLowerCase();
-      
-      switch (mode) {
-        case 'any':
-          return searchTerms.some(term => messageText.includes(term));
-        case 'all':
-          return searchTerms.every(term => messageText.includes(term));
-        case 'exact':
-          return messageText.includes(textFilter.toLowerCase());
-        default:
-          return true;
-      }
+      return searchTerms.some(term => messageText.includes(term));
     });
+  }
+
+  applyAdvancedTextFilter(messages, textFilter) {
+    try {
+      const query = this.parseLogicalQuery(textFilter);
+      return messages.filter(message => {
+        return this.evaluateLogicalQuery(query, message.text.toLowerCase());
+      });
+    } catch (error) {
+      console.warn('Error in advanced text filter, falling back to simple:', error);
+      return this.applySimpleTextFilter(messages, textFilter);
+    }
+  }
+
+  parseLogicalQuery(query) {
+    // Clean and normalize the query
+    let normalizedQuery = query.trim();
+    
+    // Handle quoted phrases first
+    const phrases = [];
+    normalizedQuery = normalizedQuery.replace(/"([^"]+)"/g, (match, phrase) => {
+      phrases.push(phrase.toLowerCase());
+      return `__PHRASE_${phrases.length - 1}__`;
+    });
+    
+    // Normalize operators
+    normalizedQuery = normalizedQuery
+      .replace(/\s+AND\s+/gi, ' && ')
+      .replace(/\s+OR\s+/gi, ' || ')
+      .replace(/\s+NOT\s+/gi, ' ! ')
+      .replace(/\s*\(\s*/g, ' ( ')
+      .replace(/\s*\)\s*/g, ' ) ');
+    
+    // Tokenize
+    const tokens = normalizedQuery.split(/\s+/).filter(token => token);
+    
+    return {
+      tokens: tokens,
+      phrases: phrases
+    };
+  }
+
+  evaluateLogicalQuery(query, messageText) {
+    const { tokens, phrases } = query;
+    
+    // Convert tokens to boolean expression
+    let expression = tokens.map(token => {
+      if (token === '&&' || token === '||' || token === '!' || token === '(' || token === ')') {
+        return token;
+      } else if (token.startsWith('__PHRASE_')) {
+        const phraseIndex = parseInt(token.replace('__PHRASE_', '').replace('__', ''));
+        const phrase = phrases[phraseIndex];
+        return messageText.includes(phrase) ? 'true' : 'false';
+      } else {
+        return messageText.includes(token.toLowerCase()) ? 'true' : 'false';
+      }
+    }).join(' ');
+    
+    // Handle NOT operator
+    expression = expression.replace(/!\s*true/g, 'false');
+    expression = expression.replace(/!\s*false/g, 'true');
+    
+    try {
+      // Safe evaluation of boolean expression
+      return this.safeBooleanEval(expression);
+    } catch (error) {
+      console.warn('Error evaluating expression:', expression, error);
+      return false;
+    }
+  }
+
+  safeBooleanEval(expression) {
+    // Only allow safe boolean operations
+    const safeExpression = expression.replace(/[^true|false|\s|&|\||\(|\)]/g, '');
+    
+    // Replace operators with JavaScript equivalents
+    const jsExpression = safeExpression
+      .replace(/&&/g, '&&')
+      .replace(/\|\|/g, '||');
+    
+    // Use Function constructor for safe evaluation
+    try {
+      return new Function('return ' + jsExpression)();
+    } catch (error) {
+      // If expression is malformed, return false
+      return false;
+    }
   }
 
   applyTimeFilter(messages, startDate, endDate) {
@@ -612,7 +723,15 @@ class PopupController {
         }
         
         if (settings.textMode) {
-          document.querySelector(`input[name="textMode"][value="${settings.textMode}"]`).checked = true;
+          const modeElement = document.querySelector(`input[name="textMode"][value="${settings.textMode}"]`);
+          if (modeElement) {
+            modeElement.checked = true;
+            this.toggleFilterHelp(settings.textMode);
+          } else {
+            // Fallback for old settings
+            document.querySelector('input[name="textMode"][value="simple"]').checked = true;
+            this.toggleFilterHelp('simple');
+          }
         }
         
         document.getElementById('enableTimeFilter').checked = settings.timeFilter || false;

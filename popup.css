@@ -379,6 +379,32 @@ body {
   margin-bottom: 0;
 }
 
+.filter-help {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f0f8ff;
+  border-radius: 4px;
+  border: 1px solid #d1ecf1;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.filter-help strong {
+  color: #0c5460;
+}
+
+.filter-help code {
+  background: #e9ecef;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.help-simple, .help-advanced {
+  color: #155724;
+}
+
 .time-filter-group {
   margin-bottom: 16px;
 }
