@@ -568,24 +568,23 @@ class PopupController {
     return filtered;
   }
 
-  applyAdvancedTextFilter(messages, textFilter) {
+    applyAdvancedTextFilter(messages, textFilter) {
     try {
-      const query = this.parseLogicalQuery(textFilter);
-      console.log('Advanced filter query:', query);
+      const parsed = this.parseAdvancedQuery(textFilter);
+      
+      if (!parsed.tokens || parsed.tokens.length === 0) {
+        return this.applySimpleTextFilter(messages, textFilter);
+      }
       
       const filtered = messages.filter(message => {
         if (!message || !message.text) {
-          console.warn('Message missing text property:', message);
           return false;
         }
-        const result = this.evaluateLogicalQuery(query, message.text.toLowerCase());
-        if (result) {
-          console.log('Advanced match:', message.text.substring(0, 50));
-        }
-        return result;
+        
+        const messageText = message.text.toLowerCase();
+        return this.evaluateAdvancedQuery(parsed, messageText);
       });
       
-      console.log('Advanced filter result:', filtered.length, 'out of', messages.length);
       return filtered;
     } catch (error) {
       console.warn('Error in advanced text filter, falling back to simple:', error);
@@ -593,27 +592,29 @@ class PopupController {
     }
   }
 
-  parseLogicalQuery(query) {
+  parseAdvancedQuery(query) {
     // Clean and normalize the query
-    let normalizedQuery = query.trim();
+    let normalizedQuery = query.trim().toLowerCase();
     
     // Handle quoted phrases first
     const phrases = [];
     normalizedQuery = normalizedQuery.replace(/"([^"]+)"/g, (match, phrase) => {
-      phrases.push(phrase.toLowerCase());
-      return `__PHRASE_${phrases.length - 1}__`;
+      phrases.push(phrase);
+      return `PHRASE_${phrases.length - 1}`;
     });
     
-    // Normalize operators
+    // Normalize operators and add spaces around them
     normalizedQuery = normalizedQuery
-      .replace(/\s+AND\s+/gi, ' && ')
-      .replace(/\s+OR\s+/gi, ' || ')
-      .replace(/\s+NOT\s+/gi, ' ! ')
-      .replace(/\s*\(\s*/g, ' ( ')
-      .replace(/\s*\)\s*/g, ' ) ');
+      .replace(/\s+and\s+/gi, ' AND ')
+      .replace(/\s+or\s+/gi, ' OR ')
+      .replace(/\s+not\s+/gi, ' NOT ')
+      .replace(/\(/g, ' ( ')
+      .replace(/\)/g, ' ) ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    // Tokenize
-    const tokens = normalizedQuery.split(/\s+/).filter(token => token);
+    // Split into tokens
+    const tokens = normalizedQuery.split(' ').filter(token => token);
     
     return {
       tokens: tokens,
@@ -621,47 +622,89 @@ class PopupController {
     };
   }
 
-  evaluateLogicalQuery(query, messageText) {
-    const { tokens, phrases } = query;
+  evaluateAdvancedQuery(parsed, messageText) {
+    const { tokens, phrases } = parsed;
     
-    // Convert tokens to boolean expression
-    let expression = tokens.map(token => {
-      if (token === '&&' || token === '||' || token === '!' || token === '(' || token === ')') {
-        return token;
-      } else if (token.startsWith('__PHRASE_')) {
-        const phraseIndex = parseInt(token.replace('__PHRASE_', '').replace('__', ''));
-        const phrase = phrases[phraseIndex];
-        return messageText.includes(phrase) ? 'true' : 'false';
-      } else {
-        return messageText.includes(token.toLowerCase()) ? 'true' : 'false';
-      }
-    }).join(' ');
+    // Convert to postfix notation for easier evaluation
+    const postfix = this.infixToPostfix(tokens);
     
-    // Handle NOT operator
-    expression = expression.replace(/!\s*true/g, 'false');
-    expression = expression.replace(/!\s*false/g, 'true');
-    
-    try {
-      // Safe evaluation of boolean expression
-      return this.safeBooleanEval(expression);
-    } catch (error) {
-      console.warn('Error evaluating expression:', expression, error);
-      return false;
-    }
+    // Evaluate postfix expression
+    return this.evaluatePostfix(postfix, phrases, messageText);
   }
 
-  safeBooleanEval(expression) {
-    // Only allow safe boolean operations - fix regex pattern
-    const safeExpression = expression.replace(/[^truefals\s&|\(\)]/g, '');
+  infixToPostfix(tokens) {
+    const precedence = { 'NOT': 3, 'AND': 2, 'OR': 1 };
+    const rightAssociative = new Set(['NOT']);
+    const output = [];
+    const operators = [];
     
-    // Use eval for boolean expressions (safe since we sanitized input)
-    try {
-      return eval(safeExpression);
-    } catch (error) {
-      // If expression is malformed, return false
-      console.warn('Error evaluating boolean expression:', safeExpression, error);
-      return false;
+    for (const token of tokens) {
+      if (token === '(') {
+        operators.push(token);
+      } else if (token === ')') {
+        while (operators.length > 0 && operators[operators.length - 1] !== '(') {
+          output.push(operators.pop());
+        }
+        operators.pop(); // Remove the '('
+      } else if (['AND', 'OR', 'NOT'].includes(token)) {
+        while (
+          operators.length > 0 &&
+          operators[operators.length - 1] !== '(' &&
+          (
+            precedence[operators[operators.length - 1]] > precedence[token] ||
+            (precedence[operators[operators.length - 1]] === precedence[token] && !rightAssociative.has(token))
+          )
+        ) {
+          output.push(operators.pop());
+        }
+        operators.push(token);
+      } else {
+        // Operand (word or phrase)
+        output.push(token);
+      }
     }
+    
+    while (operators.length > 0) {
+      output.push(operators.pop());
+    }
+    
+    return output;
+  }
+
+  evaluatePostfix(postfix, phrases, messageText) {
+    const stack = [];
+    
+    for (const token of postfix) {
+      if (token === 'AND') {
+        if (stack.length < 2) return false;
+        const b = stack.pop();
+        const a = stack.pop();
+        stack.push(a && b);
+      } else if (token === 'OR') {
+        if (stack.length < 2) return false;
+        const b = stack.pop();
+        const a = stack.pop();
+        stack.push(a || b);
+      } else if (token === 'NOT') {
+        if (stack.length < 1) return false;
+        const a = stack.pop();
+        stack.push(!a);
+      } else {
+        // Operand - check if it matches the message
+        let matches = false;
+        if (token.startsWith('PHRASE_')) {
+          const phraseIndex = parseInt(token.replace('PHRASE_', ''));
+          if (phraseIndex >= 0 && phraseIndex < phrases.length) {
+            matches = messageText.includes(phrases[phraseIndex]);
+          }
+        } else {
+          matches = messageText.includes(token);
+        }
+        stack.push(matches);
+      }
+    }
+    
+    return stack.length === 1 ? stack[0] : false;
   }
 
   applyTimeFilter(messages, startDate, endDate) {
