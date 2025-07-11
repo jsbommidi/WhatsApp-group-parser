@@ -11,7 +11,7 @@ class PopupController {
     this.currentFilters = {
       enabled: false,
       textFilter: '',
-      textMode: 'any',
+      textMode: 'simple',
       timeFilter: false,
       startDate: null,
       endDate: null
@@ -429,6 +429,8 @@ class PopupController {
     const textMode = document.querySelector('input[name="textMode"]:checked').value;
     const timeFilterEnabled = document.getElementById('enableTimeFilter').checked;
     
+    console.log('Applying filters:', { textFilter, textMode, timeFilterEnabled });
+    
     let startDate = null;
     let endDate = null;
     
@@ -457,7 +459,9 @@ class PopupController {
     };
 
     // Apply filters to current messages
+    console.log('Filtering', this.allMessages.length, 'messages with filters:', this.currentFilters);
     this.filteredMessages = this.filterMessages(this.allMessages);
+    console.log('Filtered results:', this.filteredMessages.length, 'messages');
     
     // Show filtered results
     this.showResults(this.filteredMessages);
@@ -490,7 +494,7 @@ class PopupController {
     this.currentFilters = {
       enabled: document.getElementById('enableFilters').checked,
       textFilter: '',
-      textMode: 'any',
+      textMode: 'simple',
       timeFilter: false,
       startDate: null,
       endDate: null
@@ -541,23 +545,48 @@ class PopupController {
 
   applySimpleTextFilter(messages, textFilter) {
     const searchTerms = textFilter.toLowerCase().split(',').map(term => term.trim()).filter(term => term);
+    console.log('Simple text filter - search terms:', searchTerms);
     
     if (searchTerms.length === 0) {
       return messages;
     }
 
-    return messages.filter(message => {
+    const filtered = messages.filter(message => {
+      if (!message || !message.text) {
+        console.warn('Message missing text property:', message);
+        return false;
+      }
       const messageText = message.text.toLowerCase();
-      return searchTerms.some(term => messageText.includes(term));
+      const matches = searchTerms.some(term => messageText.includes(term));
+      if (matches) {
+        console.log('Message matches:', message.text.substring(0, 50));
+      }
+      return matches;
     });
+    
+    console.log('Simple filter result:', filtered.length, 'out of', messages.length);
+    return filtered;
   }
 
   applyAdvancedTextFilter(messages, textFilter) {
     try {
       const query = this.parseLogicalQuery(textFilter);
-      return messages.filter(message => {
-        return this.evaluateLogicalQuery(query, message.text.toLowerCase());
+      console.log('Advanced filter query:', query);
+      
+      const filtered = messages.filter(message => {
+        if (!message || !message.text) {
+          console.warn('Message missing text property:', message);
+          return false;
+        }
+        const result = this.evaluateLogicalQuery(query, message.text.toLowerCase());
+        if (result) {
+          console.log('Advanced match:', message.text.substring(0, 50));
+        }
+        return result;
       });
+      
+      console.log('Advanced filter result:', filtered.length, 'out of', messages.length);
+      return filtered;
     } catch (error) {
       console.warn('Error in advanced text filter, falling back to simple:', error);
       return this.applySimpleTextFilter(messages, textFilter);
@@ -622,19 +651,15 @@ class PopupController {
   }
 
   safeBooleanEval(expression) {
-    // Only allow safe boolean operations
-    const safeExpression = expression.replace(/[^true|false|\s|&|\||\(|\)]/g, '');
+    // Only allow safe boolean operations - fix regex pattern
+    const safeExpression = expression.replace(/[^truefals\s&|\(\)]/g, '');
     
-    // Replace operators with JavaScript equivalents
-    const jsExpression = safeExpression
-      .replace(/&&/g, '&&')
-      .replace(/\|\|/g, '||');
-    
-    // Use Function constructor for safe evaluation
+    // Use eval for boolean expressions (safe since we sanitized input)
     try {
-      return new Function('return ' + jsExpression)();
+      return eval(safeExpression);
     } catch (error) {
       // If expression is malformed, return false
+      console.warn('Error evaluating boolean expression:', safeExpression, error);
       return false;
     }
   }
