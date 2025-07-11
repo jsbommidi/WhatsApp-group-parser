@@ -42,6 +42,79 @@
                 </button>
             </div>
 
+            <div class="filter-section">
+                <h4>Message Filters</h4>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label for="enableFilters">
+                            <input type="checkbox" id="enableFilters" class="filter-checkbox">
+                            Enable message filtering
+                        </label>
+                    </div>
+
+                    <div id="filterOptions" class="filter-options" style="display: none;">
+                        <div class="text-filter-group">
+                            <label for="textFilter">Text contains (separate with commas):</label>
+                            <input type="text" id="textFilter" placeholder="word1, word2, phrase" class="text-filter-input">
+                            <div class="filter-mode">
+                                <label>
+                                    <input type="radio" name="textMode" value="any" checked> Any word
+                                </label>
+                                <label>
+                                    <input type="radio" name="textMode" value="all"> All words
+                                </label>
+                                <label>
+                                    <input type="radio" name="textMode" value="exact"> Exact phrase
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="time-filter-group">
+                            <label>
+                                <input type="checkbox" id="enableTimeFilter" class="filter-checkbox">
+                                Filter by time range
+                            </label>
+                            <div id="timeFilterOptions" class="time-filter-options" style="display: none;">
+                                <div class="date-inputs">
+                                    <div class="date-input-group">
+                                        <label for="startDate">From:</label>
+                                        <input type="date" id="startDate" class="date-input">
+                                        <input type="time" id="startTime" class="time-input">
+                                    </div>
+                                    <div class="date-input-group">
+                                        <label for="endDate">To:</label>
+                                        <input type="date" id="endDate" class="date-input">
+                                        <input type="time" id="endTime" class="time-input">
+                                    </div>
+                                </div>
+                                <div class="quick-time-filters">
+                                    <button type="button" class="quick-time-btn" data-hours="1">Last 1 hour</button>
+                                    <button type="button" class="quick-time-btn" data-hours="24">Last 24 hours</button>
+                                    <button type="button" class="quick-time-btn" data-hours="168">Last week</button>
+                                    <button type="button" class="quick-time-btn" data-hours="720">Last month</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="filter-actions">
+                            <button id="applyFilters" class="btn btn-filter">
+                                <span class="btn-icon">🔍</span>
+                                Apply Filters
+                            </button>
+                            <button id="clearFilters" class="btn btn-filter-clear">
+                                <span class="btn-icon">🗑️</span>
+                                Clear Filters
+                            </button>
+                        </div>
+
+                        <div id="filterStatus" class="filter-status" style="display: none;">
+                            <span id="filterStatusText">Filters applied</span>
+                            <span id="filteredCount" class="filtered-count">0 messages match</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="auto-extract-section">
                 <h4>Auto Extract</h4>
                 <div class="auto-extract-controls">

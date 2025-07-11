@@ -295,6 +295,217 @@ body {
   padding: 8px;
 }
 
+/* Filter Section */
+.filter-section {
+  border-top: 1px solid #f0f0f0;
+  padding-top: 16px;
+  margin-bottom: 20px;
+}
+
+.filter-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+}
+
+.filter-checkbox {
+  margin-right: 8px;
+  transform: scale(1.1);
+}
+
+.filter-options {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.text-filter-group {
+  margin-bottom: 16px;
+}
+
+.text-filter-group label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.text-filter-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.text-filter-input:focus {
+  outline: none;
+  border-color: #007AFF;
+}
+
+.filter-mode {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-mode label {
+  display: flex !important;
+  align-items: center;
+  font-size: 11px !important;
+  color: #666 !important;
+  margin-bottom: 0 !important;
+  cursor: pointer;
+}
+
+.filter-mode input[type="radio"] {
+  margin-right: 4px;
+  margin-bottom: 0;
+}
+
+.time-filter-group {
+  margin-bottom: 16px;
+}
+
+.time-filter-group > label {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.time-filter-options {
+  background: white;
+  border-radius: 6px;
+  padding: 10px;
+  border: 1px solid #e9ecef;
+  margin-top: 8px;
+}
+
+.date-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.date-input-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-input-group label {
+  font-size: 11px;
+  color: #666;
+  min-width: 35px;
+  font-weight: 500;
+}
+
+.date-input, .time-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.date-input:focus, .time-input:focus {
+  outline: none;
+  border-color: #007AFF;
+}
+
+.quick-time-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.quick-time-btn {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-time-btn:hover {
+  background: #f8f9fa;
+  border-color: #007AFF;
+}
+
+.quick-time-btn.active {
+  background: #007AFF;
+  color: white;
+  border-color: #007AFF;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-actions .btn {
+  flex: 1;
+  font-size: 12px;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.btn-filter {
+  background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+}
+
+.btn-filter-clear {
+  background: linear-gradient(135deg, #8E8E93 0%, #636366 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(142, 142, 147, 0.3);
+}
+
+.filter-status {
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.filter-status span {
+  font-size: 11px;
+  color: #1565c0;
+  font-weight: 500;
+}
+
+.filtered-count {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px !important;
+  color: #666 !important;
+}
+
 /* Auto Extract Section */
 .auto-extract-section {
   border-top: 1px solid #f0f0f0;

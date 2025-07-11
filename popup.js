@@ -8,6 +8,16 @@ class PopupController {
     this.autoExtractActive = false;
     this.autoExtractCount = 0;
     this.nextExtractTime = null;
+    this.currentFilters = {
+      enabled: false,
+      textFilter: '',
+      textMode: 'any',
+      timeFilter: false,
+      startDate: null,
+      endDate: null
+    };
+    this.allMessages = [];
+    this.filteredMessages = [];
     this.init();
   }
 
@@ -26,6 +36,17 @@ class PopupController {
     document.getElementById('startAutoExtract').addEventListener('click', () => this.startAutoExtract());
     document.getElementById('stopAutoExtract').addEventListener('click', () => this.stopAutoExtract());
 
+    // Filter controls
+    document.getElementById('enableFilters').addEventListener('change', (e) => this.toggleFilterOptions(e.target.checked));
+    document.getElementById('enableTimeFilter').addEventListener('change', (e) => this.toggleTimeFilterOptions(e.target.checked));
+    document.getElementById('applyFilters').addEventListener('click', () => this.applyFilters());
+    document.getElementById('clearFilters').addEventListener('click', () => this.clearFilters());
+    
+    // Quick time filter buttons
+    document.querySelectorAll('.quick-time-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => this.setQuickTimeFilter(e.target.dataset.hours));
+    });
+
     // Export buttons
     document.getElementById('exportJSON').addEventListener('click', () => this.exportJSON());
     document.getElementById('exportCSV').addEventListener('click', () => this.exportCSV());
@@ -37,8 +58,9 @@ class PopupController {
       }
     });
 
-    // Load saved auto-extract settings
+    // Load saved settings
     this.loadAutoExtractSettings();
+    this.loadFilterSettings();
   }
 
   async checkWhatsAppStatus() {
@@ -87,10 +109,22 @@ class PopupController {
       const response = await this.sendMessageToContent({ action: 'extractVisible' });
       
       if (response && response.success) {
-        this.currentMessages = response.messages;
+        this.allMessages = response.messages;
         this.currentChatTitle = response.chatTitle;
-        this.showResults(response.messages);
-        this.updateStatus('success', `Found ${response.count} messages`);
+        
+        // Apply filters if enabled
+        const messagesToShow = this.currentFilters.enabled ? 
+          this.filterMessages(this.allMessages) : this.allMessages;
+        
+        this.currentMessages = messagesToShow;
+        this.showResults(messagesToShow);
+        
+        if (this.currentFilters.enabled && messagesToShow.length !== this.allMessages.length) {
+          this.showFilterStatus(messagesToShow.length);
+          this.updateStatus('success', `Found ${response.count} messages, ${messagesToShow.length} match filters`);
+        } else {
+          this.updateStatus('success', `Found ${response.count} messages`);
+        }
       } else {
         this.updateStatus('error', 'Failed to extract messages');
       }
@@ -147,10 +181,23 @@ class PopupController {
       this.updateProgress(progress);
       this.updateProgressText(`Found ${data.messagesFound} messages (${data.attempts}/${data.maxAttempts} scrolls)`);
     } else if (data.type === 'complete') {
-      this.currentMessages = data.messages;
+      this.allMessages = data.messages;
       this.currentChatTitle = data.chatTitle;
-      this.showResults(data.messages);
-      this.updateStatus('success', `Extraction complete: ${data.messages.length} messages`);
+      
+      // Apply filters if enabled
+      const messagesToShow = this.currentFilters.enabled ? 
+        this.filterMessages(this.allMessages) : this.allMessages;
+      
+      this.currentMessages = messagesToShow;
+      this.showResults(messagesToShow);
+      
+      if (this.currentFilters.enabled && messagesToShow.length !== this.allMessages.length) {
+        this.showFilterStatus(messagesToShow.length);
+        this.updateStatus('success', `Extraction complete: ${data.messages.length} messages, ${messagesToShow.length} match filters`);
+      } else {
+        this.updateStatus('success', `Extraction complete: ${data.messages.length} messages`);
+      }
+      
       this.hideProgress();
       this.toggleExtractionButtons(false);
       this.isExtracting = false;
@@ -313,6 +360,283 @@ class PopupController {
     }, 2000);
   }
 
+  toggleFilterOptions(enabled) {
+    const filterOptions = document.getElementById('filterOptions');
+    filterOptions.style.display = enabled ? 'block' : 'none';
+    this.currentFilters.enabled = enabled;
+    
+    if (!enabled) {
+      this.clearFilters();
+    }
+  }
+
+  toggleTimeFilterOptions(enabled) {
+    const timeFilterOptions = document.getElementById('timeFilterOptions');
+    timeFilterOptions.style.display = enabled ? 'block' : 'none';
+    this.currentFilters.timeFilter = enabled;
+  }
+
+  setQuickTimeFilter(hours) {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - (hours * 60 * 60 * 1000));
+    
+    // Update date and time inputs
+    document.getElementById('endDate').value = now.toISOString().split('T')[0];
+    document.getElementById('endTime').value = now.toTimeString().slice(0, 5);
+    document.getElementById('startDate').value = startTime.toISOString().split('T')[0];
+    document.getElementById('startTime').value = startTime.toTimeString().slice(0, 5);
+    
+    // Enable time filter
+    document.getElementById('enableTimeFilter').checked = true;
+    this.toggleTimeFilterOptions(true);
+    
+    // Update button states
+    document.querySelectorAll('.quick-time-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+  }
+
+  applyFilters() {
+    if (!this.currentFilters.enabled) {
+      this.showTemporaryMessage('Enable filters first', 'error');
+      return;
+    }
+
+    // Get filter values
+    const textFilter = document.getElementById('textFilter').value.trim();
+    const textMode = document.querySelector('input[name="textMode"]:checked').value;
+    const timeFilterEnabled = document.getElementById('enableTimeFilter').checked;
+    
+    let startDate = null;
+    let endDate = null;
+    
+    if (timeFilterEnabled) {
+      const startDateValue = document.getElementById('startDate').value;
+      const startTimeValue = document.getElementById('startTime').value;
+      const endDateValue = document.getElementById('endDate').value;
+      const endTimeValue = document.getElementById('endTime').value;
+      
+      if (startDateValue) {
+        startDate = new Date(`${startDateValue}T${startTimeValue || '00:00'}`);
+      }
+      if (endDateValue) {
+        endDate = new Date(`${endDateValue}T${endTimeValue || '23:59'}`);
+      }
+    }
+
+    // Update current filters
+    this.currentFilters = {
+      enabled: true,
+      textFilter: textFilter,
+      textMode: textMode,
+      timeFilter: timeFilterEnabled,
+      startDate: startDate,
+      endDate: endDate
+    };
+
+    // Apply filters to current messages
+    this.filteredMessages = this.filterMessages(this.allMessages);
+    
+    // Show filtered results
+    this.showResults(this.filteredMessages);
+    this.showFilterStatus(this.filteredMessages.length);
+    
+    // Save filter settings
+    this.saveFilterSettings();
+    
+    this.showTemporaryMessage('Filters applied successfully');
+  }
+
+  clearFilters() {
+    // Reset filter inputs
+    document.getElementById('textFilter').value = '';
+    document.querySelector('input[name="textMode"][value="any"]').checked = true;
+    document.getElementById('enableTimeFilter').checked = false;
+    document.getElementById('startDate').value = '';
+    document.getElementById('startTime').value = '';
+    document.getElementById('endDate').value = '';
+    document.getElementById('endTime').value = '';
+    
+    // Reset UI
+    this.toggleTimeFilterOptions(false);
+    document.querySelectorAll('.quick-time-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Reset filters
+    this.currentFilters = {
+      enabled: document.getElementById('enableFilters').checked,
+      textFilter: '',
+      textMode: 'any',
+      timeFilter: false,
+      startDate: null,
+      endDate: null
+    };
+    
+    // Show all messages if we have them
+    if (this.allMessages.length > 0) {
+      this.showResults(this.allMessages);
+    }
+    
+    // Hide filter status
+    document.getElementById('filterStatus').style.display = 'none';
+    
+    this.showTemporaryMessage('Filters cleared');
+  }
+
+  filterMessages(messages) {
+    if (!this.currentFilters.enabled) {
+      return messages;
+    }
+
+    let filtered = [...messages];
+
+    // Apply text filter
+    if (this.currentFilters.textFilter) {
+      filtered = this.applyTextFilter(filtered, this.currentFilters.textFilter, this.currentFilters.textMode);
+    }
+
+    // Apply time filter
+    if (this.currentFilters.timeFilter && (this.currentFilters.startDate || this.currentFilters.endDate)) {
+      filtered = this.applyTimeFilter(filtered, this.currentFilters.startDate, this.currentFilters.endDate);
+    }
+
+    return filtered;
+  }
+
+  applyTextFilter(messages, textFilter, mode) {
+    const searchTerms = textFilter.toLowerCase().split(',').map(term => term.trim()).filter(term => term);
+    
+    if (searchTerms.length === 0) {
+      return messages;
+    }
+
+    return messages.filter(message => {
+      const messageText = message.text.toLowerCase();
+      
+      switch (mode) {
+        case 'any':
+          return searchTerms.some(term => messageText.includes(term));
+        case 'all':
+          return searchTerms.every(term => messageText.includes(term));
+        case 'exact':
+          return messageText.includes(textFilter.toLowerCase());
+        default:
+          return true;
+      }
+    });
+  }
+
+  applyTimeFilter(messages, startDate, endDate) {
+    return messages.filter(message => {
+      // Try to parse the timestamp
+      const messageTime = this.parseMessageTimestamp(message.timestamp);
+      if (!messageTime) {
+        return true; // Include messages with unparseable timestamps
+      }
+
+      if (startDate && messageTime < startDate) {
+        return false;
+      }
+      if (endDate && messageTime > endDate) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  parseMessageTimestamp(timestamp) {
+    if (!timestamp) return null;
+    
+    try {
+      // Try different timestamp formats
+      let date;
+      
+      // Format: "10:30 AM" or "22:30"
+      if (timestamp.match(/^\d{1,2}:\d{2}(\s?(AM|PM))?$/i)) {
+        const today = new Date();
+        const timeStr = timestamp.replace(/\s/g, '');
+        date = new Date(`${today.toDateString()} ${timeStr}`);
+      }
+      // Format: "12/31/2023, 10:30 AM"
+      else if (timestamp.includes(',')) {
+        date = new Date(timestamp);
+      }
+      // Format: "2023-12-31 10:30:00"
+      else if (timestamp.includes('-') && timestamp.includes(':')) {
+        date = new Date(timestamp);
+      }
+      // Format: ISO string
+      else {
+        date = new Date(timestamp);
+      }
+      
+      return isNaN(date.getTime()) ? null : date;
+    } catch (error) {
+      console.warn('Could not parse timestamp:', timestamp);
+      return null;
+    }
+  }
+
+  showFilterStatus(count) {
+    const filterStatus = document.getElementById('filterStatus');
+    const filteredCount = document.getElementById('filteredCount');
+    
+    filteredCount.textContent = `${count} messages match`;
+    filterStatus.style.display = 'block';
+  }
+
+  async saveFilterSettings() {
+    try {
+      await chrome.storage.local.set({
+        filterSettings: this.currentFilters
+      });
+    } catch (error) {
+      console.error('Error saving filter settings:', error);
+    }
+  }
+
+  async loadFilterSettings() {
+    try {
+      const result = await chrome.storage.local.get('filterSettings');
+      if (result.filterSettings) {
+        const settings = result.filterSettings;
+        
+        // Restore filter settings
+        document.getElementById('enableFilters').checked = settings.enabled || false;
+        this.toggleFilterOptions(settings.enabled || false);
+        
+        if (settings.textFilter) {
+          document.getElementById('textFilter').value = settings.textFilter;
+        }
+        
+        if (settings.textMode) {
+          document.querySelector(`input[name="textMode"][value="${settings.textMode}"]`).checked = true;
+        }
+        
+        document.getElementById('enableTimeFilter').checked = settings.timeFilter || false;
+        this.toggleTimeFilterOptions(settings.timeFilter || false);
+        
+        if (settings.startDate) {
+          const startDate = new Date(settings.startDate);
+          document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+          document.getElementById('startTime').value = startDate.toTimeString().slice(0, 5);
+        }
+        
+        if (settings.endDate) {
+          const endDate = new Date(settings.endDate);
+          document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+          document.getElementById('endTime').value = endDate.toTimeString().slice(0, 5);
+        }
+        
+        this.currentFilters = settings;
+      }
+    } catch (error) {
+      console.error('Error loading filter settings:', error);
+    }
+  }
+
   async startAutoExtract() {
     if (this.autoExtractActive) {
       return;
@@ -396,16 +720,25 @@ class PopupController {
       
       if (response && response.success) {
         this.autoExtractCount++;
-        this.currentMessages = response.messages;
+        this.allMessages = response.messages;
         this.currentChatTitle = response.chatTitle;
+        
+        // Apply filters if enabled
+        const messagesToShow = this.currentFilters.enabled ? 
+          this.filterMessages(this.allMessages) : this.allMessages;
+        
+        this.currentMessages = messagesToShow;
         
         // Update auto-extract status
         document.getElementById('autoExtractCount').textContent = 
           `${this.autoExtractCount} extractions completed`;
         
         // Show results if we have messages
-        if (response.messages.length > 0) {
-          this.showResults(response.messages);
+        if (messagesToShow.length > 0) {
+          this.showResults(messagesToShow);
+          if (this.currentFilters.enabled && messagesToShow.length !== this.allMessages.length) {
+            this.showFilterStatus(messagesToShow.length);
+          }
         }
 
         // Log to background for potential storage/export
