@@ -273,6 +273,10 @@ const whatsappParser = new WhatsAppParser();
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
+    case 'ping':
+      sendResponse({ success: true, message: 'Content script active' });
+      break;
+      
     case 'extractVisible':
       const visibleMessages = whatsappParser.extractVisibleMessages();
       const chatTitle = whatsappParser.getChatTitle();

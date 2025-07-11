@@ -61,6 +61,12 @@ class BackgroundService {
           this.updateBadge(sender.tab.id, 'complete');
           break;
 
+        case 'autoExtractionComplete':
+          console.log('Auto-extraction completed:', message.data);
+          // Could store extraction history or show notification
+          this.handleAutoExtractionComplete(message.data, sender.tab.id);
+          break;
+
         case 'exportStarted':
           console.log('Export started:', message.format);
           // Could show notification or update UI
@@ -160,6 +166,34 @@ class BackgroundService {
       }
     } catch (error) {
       console.error('Error broadcasting to WhatsApp tabs:', error);
+    }
+  }
+
+  // Handle auto-extraction completion
+  async handleAutoExtractionComplete(data, tabId) {
+    try {
+      // Store extraction history
+      const history = await chrome.storage.local.get('extractionHistory') || { extractionHistory: [] };
+      const extractionHistory = history.extractionHistory || [];
+      
+      extractionHistory.push({
+        ...data,
+        tabId: tabId,
+        extractionId: Date.now()
+      });
+
+      // Keep only last 100 extractions
+      if (extractionHistory.length > 100) {
+        extractionHistory.splice(0, extractionHistory.length - 100);
+      }
+
+      await chrome.storage.local.set({ extractionHistory });
+
+      // Update badge to show auto-extraction is active
+      this.updateBadge(tabId, 'loading');
+      
+    } catch (error) {
+      console.error('Error handling auto-extraction completion:', error);
     }
   }
 }

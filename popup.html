@@ -42,6 +42,43 @@
                 </button>
             </div>
 
+            <div class="auto-extract-section">
+                <h4>Auto Extract</h4>
+                <div class="auto-extract-controls">
+                    <div class="frequency-input-group">
+                        <label for="extractFrequency">Extract every:</label>
+                        <div class="frequency-controls">
+                            <input type="number" id="extractFrequency" min="1" max="1440" value="5" class="frequency-input">
+                            <select id="frequencyUnit" class="frequency-unit">
+                                <option value="seconds">Seconds</option>
+                                <option value="minutes" selected>Minutes</option>
+                                <option value="hours">Hours</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="auto-extract-buttons">
+                        <button id="startAutoExtract" class="btn btn-auto">
+                            <span class="btn-icon">🔄</span>
+                            Start Auto Extract
+                        </button>
+                        
+                        <button id="stopAutoExtract" class="btn btn-auto-stop" style="display: none;">
+                            <span class="btn-icon">⏸️</span>
+                            Stop Auto Extract
+                        </button>
+                    </div>
+                </div>
+
+                <div id="autoExtractStatus" class="auto-extract-status" style="display: none;">
+                    <div class="status-info">
+                        <span id="autoExtractText">Auto-extracting...</span>
+                        <span id="nextExtractTime" class="next-extract">Next: --:--</span>
+                    </div>
+                    <div id="autoExtractCount" class="extract-count">0 extractions completed</div>
+                </div>
+            </div>
+
             <div id="progressSection" class="progress-section" style="display: none;">
                 <div class="progress-bar">
                     <div id="progressFill" class="progress-fill"></div>

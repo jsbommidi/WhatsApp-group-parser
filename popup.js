@@ -4,6 +4,10 @@ class PopupController {
     this.currentMessages = [];
     this.currentChatTitle = '';
     this.isExtracting = false;
+    this.autoExtractInterval = null;
+    this.autoExtractActive = false;
+    this.autoExtractCount = 0;
+    this.nextExtractTime = null;
     this.init();
   }
 
@@ -18,6 +22,10 @@ class PopupController {
     document.getElementById('extractAll').addEventListener('click', () => this.extractAllMessages());
     document.getElementById('stopExtraction').addEventListener('click', () => this.stopExtraction());
 
+    // Auto-extract buttons
+    document.getElementById('startAutoExtract').addEventListener('click', () => this.startAutoExtract());
+    document.getElementById('stopAutoExtract').addEventListener('click', () => this.stopAutoExtract());
+
     // Export buttons
     document.getElementById('exportJSON').addEventListener('click', () => this.exportJSON());
     document.getElementById('exportCSV').addEventListener('click', () => this.exportCSV());
@@ -28,6 +36,9 @@ class PopupController {
         this.handleExtractionProgress(message.data);
       }
     });
+
+    // Load saved auto-extract settings
+    this.loadAutoExtractSettings();
   }
 
   async checkWhatsAppStatus() {
@@ -300,6 +311,182 @@ class PopupController {
     setTimeout(() => {
       statusText.textContent = originalText;
     }, 2000);
+  }
+
+  async startAutoExtract() {
+    if (this.autoExtractActive) {
+      return;
+    }
+
+    const frequency = parseInt(document.getElementById('extractFrequency').value);
+    const unit = document.getElementById('frequencyUnit').value;
+
+    if (!frequency || frequency < 1) {
+      this.showTemporaryMessage('Please enter a valid frequency', 'error');
+      return;
+    }
+
+    // Convert to milliseconds
+    let intervalMs;
+    switch (unit) {
+      case 'seconds':
+        intervalMs = frequency * 1000;
+        break;
+      case 'minutes':
+        intervalMs = frequency * 60 * 1000;
+        break;
+      case 'hours':
+        intervalMs = frequency * 60 * 60 * 1000;
+        break;
+      default:
+        intervalMs = frequency * 60 * 1000; // Default to minutes
+    }
+
+    this.autoExtractActive = true;
+    this.autoExtractCount = 0;
+    
+    // Save settings
+    await this.saveAutoExtractSettings(frequency, unit);
+
+    // Show auto-extract status
+    document.getElementById('autoExtractStatus').style.display = 'block';
+    document.getElementById('startAutoExtract').style.display = 'none';
+    document.getElementById('stopAutoExtract').style.display = 'block';
+
+    // Initial extraction
+    this.performAutoExtraction();
+
+    // Set up interval
+    this.autoExtractInterval = setInterval(() => {
+      this.performAutoExtraction();
+    }, intervalMs);
+
+    // Update next extraction time
+    this.updateNextExtractionTime(intervalMs);
+    
+    this.updateStatus('success', `Auto-extract started (every ${frequency} ${unit})`);
+  }
+
+  async stopAutoExtract() {
+    if (!this.autoExtractActive) {
+      return;
+    }
+
+    this.autoExtractActive = false;
+    
+    if (this.autoExtractInterval) {
+      clearInterval(this.autoExtractInterval);
+      this.autoExtractInterval = null;
+    }
+
+    // Hide auto-extract status
+    document.getElementById('autoExtractStatus').style.display = 'none';
+    document.getElementById('startAutoExtract').style.display = 'block';
+    document.getElementById('stopAutoExtract').style.display = 'none';
+
+    this.updateStatus('ready', 'Auto-extract stopped');
+    
+    // Clear saved settings
+    await this.clearAutoExtractSettings();
+  }
+
+  async performAutoExtraction() {
+    try {
+      const response = await this.sendMessageToContent({ action: 'extractVisible' });
+      
+      if (response && response.success) {
+        this.autoExtractCount++;
+        this.currentMessages = response.messages;
+        this.currentChatTitle = response.chatTitle;
+        
+        // Update auto-extract status
+        document.getElementById('autoExtractCount').textContent = 
+          `${this.autoExtractCount} extractions completed`;
+        
+        // Show results if we have messages
+        if (response.messages.length > 0) {
+          this.showResults(response.messages);
+        }
+
+        // Log to background for potential storage/export
+        chrome.runtime.sendMessage({
+          action: 'autoExtractionComplete',
+          data: {
+            timestamp: new Date().toISOString(),
+            messageCount: response.messages.length,
+            chatTitle: response.chatTitle
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Auto-extraction error:', error);
+    }
+  }
+
+  updateNextExtractionTime(intervalMs) {
+    if (!this.autoExtractActive) return;
+
+    const now = new Date();
+    this.nextExtractTime = new Date(now.getTime() + intervalMs);
+    
+    const timeString = this.nextExtractTime.toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    
+    document.getElementById('nextExtractTime').textContent = `Next: ${timeString}`;
+
+    // Update the time every second
+    setTimeout(() => {
+      if (this.autoExtractActive) {
+        const remaining = this.nextExtractTime.getTime() - new Date().getTime();
+        if (remaining > 0) {
+          const minutes = Math.floor(remaining / 60000);
+          const seconds = Math.floor((remaining % 60000) / 1000);
+          document.getElementById('nextExtractTime').textContent = 
+            `Next: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+          
+          setTimeout(() => this.updateNextExtractionTime(0), 1000);
+        }
+      }
+    }, 1000);
+  }
+
+  async saveAutoExtractSettings(frequency, unit) {
+    try {
+      await chrome.storage.local.set({
+        autoExtractSettings: {
+          frequency: frequency,
+          unit: unit,
+          active: true
+        }
+      });
+    } catch (error) {
+      console.error('Error saving auto-extract settings:', error);
+    }
+  }
+
+  async loadAutoExtractSettings() {
+    try {
+      const result = await chrome.storage.local.get('autoExtractSettings');
+      if (result.autoExtractSettings) {
+        const settings = result.autoExtractSettings;
+        document.getElementById('extractFrequency').value = settings.frequency || 5;
+        document.getElementById('frequencyUnit').value = settings.unit || 'minutes';
+        
+        // Don't auto-start, just restore the settings
+      }
+    } catch (error) {
+      console.error('Error loading auto-extract settings:', error);
+    }
+  }
+
+  async clearAutoExtractSettings() {
+    try {
+      await chrome.storage.local.remove('autoExtractSettings');
+    } catch (error) {
+      console.error('Error clearing auto-extract settings:', error);
+    }
   }
 
   escapeHtml(text) {
