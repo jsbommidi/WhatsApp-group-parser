@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Message Parser</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="icons/icon32.png" alt="WhatsApp Parser" class="logo">
+            <h1>WhatsApp Message Parser</h1>
+        </div>
+
+        <div class="status-section">
+            <div id="status" class="status">
+                <span class="status-indicator" id="statusIndicator">●</span>
+                <span id="statusText">Checking WhatsApp...</span>
+            </div>
+            <div id="chatInfo" class="chat-info" style="display: none;">
+                <span id="chatTitle">Chat Title</span>
+                <span id="messageCount" class="message-count">0 messages</span>
+            </div>
+        </div>
+
+        <div class="main-content" id="mainContent" style="display: none;">
+            <div class="button-group">
+                <button id="extractVisible" class="btn btn-primary">
+                    <span class="btn-icon">👁️</span>
+                    Extract Visible Messages
+                </button>
+                
+                <button id="extractAll" class="btn btn-secondary">
+                    <span class="btn-icon">📜</span>
+                    Extract All Messages
+                </button>
+                
+                <button id="stopExtraction" class="btn btn-danger" style="display: none;">
+                    <span class="btn-icon">⏹️</span>
+                    Stop Extraction
+                </button>
+            </div>
+
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText" class="progress-text">Loading messages...</div>
+            </div>
+
+            <div id="resultsSection" class="results-section" style="display: none;">
+                <div class="results-header">
+                    <h3>Extraction Results</h3>
+                    <span id="extractedCount" class="extracted-count">0 messages found</span>
+                </div>
+
+                <div class="message-preview" id="messagePreview">
+                    <!-- Messages will be displayed here -->
+                </div>
+
+                <div class="export-section">
+                    <h4>Export Options</h4>
+                    <div class="button-group">
+                        <button id="exportJSON" class="btn btn-export">
+                            <span class="btn-icon">📄</span>
+                            Export as JSON
+                        </button>
+                        
+                        <button id="exportCSV" class="btn btn-export">
+                            <span class="btn-icon">📊</span>
+                            Export as CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="not-whatsapp" id="notWhatsApp" style="display: none;">
+            <div class="warning">
+                <span class="warning-icon">⚠️</span>
+                <h3>Not on WhatsApp Web</h3>
+                <p>Please navigate to <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a> to use this extension.</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="help-text">
+                <small>Open a chat and click "Extract Messages" to begin</small>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
