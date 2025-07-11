@@ -25,19 +25,36 @@
         </div>
 
         <div class="main-content" id="mainContent" style="display: none;">
+            <!-- Multi-Chat Mode Toggle -->
+            <div class="multi-chat-section">
+                <div class="multi-chat-toggle">
+                    <label for="multiChatMode">
+                        <input type="checkbox" id="multiChatMode" class="filter-checkbox">
+                        Multi-Chat Collection Mode
+                    </label>
+                </div>
+                <div id="multiChatStatus" class="multi-chat-status" style="display: none;">
+                    <div class="multi-chat-info">
+                        <span id="multiChatCount">0 chats collected</span>
+                        <span id="multiChatMessages">0 total messages</span>
+                    </div>
+                    <div class="multi-chat-actions">
+                        <button id="clearMultiChat" class="btn btn-filter-clear">Clear Collection</button>
+                        <button id="viewMultiChat" class="btn btn-filter">View Collected</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="button-group">
                 <button id="extractVisible" class="btn btn-primary">
-                    <span class="btn-icon">👁️</span>
                     Extract Visible Messages
                 </button>
                 
                 <button id="extractAll" class="btn btn-secondary">
-                    <span class="btn-icon">📜</span>
                     Extract All Messages
                 </button>
                 
                 <button id="stopExtraction" class="btn btn-danger" style="display: none;">
-                    <span class="btn-icon">⏹️</span>
                     Stop Extraction
                 </button>
             </div>
@@ -114,11 +131,9 @@
 
                         <div class="filter-actions">
                             <button id="applyFilters" class="btn btn-filter">
-                                <span class="btn-icon">🔍</span>
                                 Apply Filters
                             </button>
                             <button id="clearFilters" class="btn btn-filter-clear">
-                                <span class="btn-icon">🗑️</span>
                                 Clear Filters
                             </button>
                         </div>
@@ -148,12 +163,10 @@
                     
                     <div class="auto-extract-buttons">
                         <button id="startAutoExtract" class="btn btn-auto">
-                            <span class="btn-icon">🔄</span>
                             Start Auto Extract
                         </button>
                         
                         <button id="stopAutoExtract" class="btn btn-auto-stop" style="display: none;">
-                            <span class="btn-icon">⏸️</span>
                             Stop Auto Extract
                         </button>
                     </div>
@@ -175,6 +188,31 @@
                 <div id="progressText" class="progress-text">Loading messages...</div>
             </div>
 
+            <!-- Multi-Chat Collection Display -->
+            <div id="multiChatResults" class="multi-chat-results" style="display: none;">
+                <div class="results-header">
+                    <h3>Multi-Chat Collection</h3>
+                    <span id="multiChatTotal" class="extracted-count">0 chats, 0 messages</span>
+                </div>
+                
+                <div class="collected-chats" id="collectedChats">
+                    <!-- Collected chats will be displayed here -->
+                </div>
+
+                <div class="export-section">
+                    <h4>Export Multi-Chat Data</h4>
+                    <div class="button-group">
+                        <button id="exportMultiJSON" class="btn btn-export">
+                            Export All as JSON
+                        </button>
+                        
+                        <button id="exportMultiCSV" class="btn btn-export">
+                            Export All as CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="resultsSection" class="results-section" style="display: none;">
                 <div class="results-header">
                     <h3>Extraction Results</h3>
@@ -189,12 +227,10 @@
                     <h4>Export Options</h4>
                     <div class="button-group">
                         <button id="exportJSON" class="btn btn-export">
-                            <span class="btn-icon">📄</span>
                             Export as JSON
                         </button>
                         
                         <button id="exportCSV" class="btn btn-export">
-                            <span class="btn-icon">📊</span>
                             Export as CSV
                         </button>
                     </div>
@@ -204,7 +240,6 @@
 
         <div class="not-whatsapp" id="notWhatsApp" style="display: none;">
             <div class="warning">
-                <span class="warning-icon">⚠️</span>
                 <h3>Not on WhatsApp Web</h3>
                 <p>Please navigate to <a href="https://web.whatsapp.com" target="_blank">web.whatsapp.com</a> to use this extension.</p>
             </div>

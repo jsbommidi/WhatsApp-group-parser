@@ -11,6 +11,7 @@ class PopupController {
     this.currentFilters = {
       enabled: false,
       textFilter: '',
+      numberFilter: '',
       textMode: 'simple',
       timeFilter: false,
       startDate: null,
@@ -18,6 +19,15 @@ class PopupController {
     };
     this.allMessages = [];
     this.filteredMessages = [];
+    
+    // Multi-chat collection
+    this.multiChatMode = false;
+    this.multiChatData = {
+      chats: new Map(), // chatTitle -> {messages: [], extractedAt: timestamp, messageCount: number}
+      totalMessages: 0,
+      totalChats: 0
+    };
+    
     this.init();
   }
 
@@ -31,6 +41,48 @@ class PopupController {
     document.getElementById('extractVisible').addEventListener('click', () => this.extractVisibleMessages());
     document.getElementById('extractAll').addEventListener('click', () => this.extractAllMessages());
     document.getElementById('stopExtraction').addEventListener('click', () => this.stopExtraction());
+
+    // Multi-chat controls - with error checking
+    try {
+      const multiChatMode = document.getElementById('multiChatMode');
+      const clearMultiChat = document.getElementById('clearMultiChat');
+      const viewMultiChat = document.getElementById('viewMultiChat');
+      const exportMultiJSON = document.getElementById('exportMultiJSON');
+      const exportMultiCSV = document.getElementById('exportMultiCSV');
+      
+      if (multiChatMode) {
+        multiChatMode.addEventListener('change', (e) => this.toggleMultiChatMode(e.target.checked));
+        console.log('Multi-chat mode event listener added');
+      } else {
+        console.error('multiChatMode element not found');
+      }
+      
+      if (clearMultiChat) {
+        clearMultiChat.addEventListener('click', () => this.clearMultiChatCollection());
+      } else {
+        console.error('clearMultiChat element not found');
+      }
+      
+      if (viewMultiChat) {
+        viewMultiChat.addEventListener('click', () => this.showMultiChatResults());
+      } else {
+        console.error('viewMultiChat element not found');
+      }
+      
+      if (exportMultiJSON) {
+        exportMultiJSON.addEventListener('click', () => this.exportMultiChatJSON());
+      } else {
+        console.error('exportMultiJSON element not found');
+      }
+      
+      if (exportMultiCSV) {
+        exportMultiCSV.addEventListener('click', () => this.exportMultiChatCSV());
+      } else {
+        console.error('exportMultiCSV element not found');
+      }
+    } catch (error) {
+      console.error('Error binding multi-chat events:', error);
+    }
 
     // Auto-extract buttons
     document.getElementById('startAutoExtract').addEventListener('click', () => this.startAutoExtract());
@@ -66,6 +118,7 @@ class PopupController {
     // Load saved settings
     this.loadAutoExtractSettings();
     this.loadFilterSettings();
+    this.loadMultiChatData();
   }
 
   async checkWhatsAppStatus() {
@@ -117,6 +170,13 @@ class PopupController {
         this.allMessages = response.messages;
         this.currentChatTitle = response.chatTitle;
         
+        // If multi-chat mode is enabled, add to collection
+        console.log('Multi-chat mode status:', this.multiChatMode);
+        if (this.multiChatMode) {
+          console.log('Adding to multi-chat collection:', response.chatTitle, response.messages.length);
+          this.addToMultiChatCollection(response.chatTitle, response.messages);
+        }
+        
         // Apply filters if enabled
         const messagesToShow = this.currentFilters.enabled ? 
           this.filterMessages(this.allMessages) : this.allMessages;
@@ -129,6 +189,12 @@ class PopupController {
           this.updateStatus('success', `Found ${response.count} messages, ${messagesToShow.length} match filters`);
         } else {
           this.updateStatus('success', `Found ${response.count} messages`);
+        }
+        
+        // Update multi-chat display if in multi-chat mode
+        if (this.multiChatMode) {
+          this.updateMultiChatDisplay();
+          this.showTemporaryMessage(`Added "${response.chatTitle}" to collection`);
         }
       } else {
         this.updateStatus('error', 'Failed to extract messages');
@@ -1035,9 +1101,290 @@ class PopupController {
     div.textContent = text;
     return div.innerHTML;
   }
+
+  // Multi-Chat Collection Methods
+  toggleMultiChatMode(enabled) {
+    console.log('toggleMultiChatMode called with enabled:', enabled);
+    this.multiChatMode = enabled;
+    const multiChatStatus = document.getElementById('multiChatStatus');
+    
+    if (!multiChatStatus) {
+      console.error('multiChatStatus element not found');
+      return;
+    }
+    
+    if (enabled) {
+      multiChatStatus.style.display = 'block';
+      this.updateMultiChatDisplay();
+      this.showTemporaryMessage('Multi-chat mode enabled. Switch between chats and extract messages.');
+      console.log('Multi-chat mode enabled');
+    } else {
+      multiChatStatus.style.display = 'none';
+      this.showTemporaryMessage('Multi-chat mode disabled.');
+      console.log('Multi-chat mode disabled');
+    }
+    
+    this.saveMultiChatData();
+  }
+
+  addToMultiChatCollection(chatTitle, messages) {
+    console.log('addToMultiChatCollection called:', chatTitle, messages ? messages.length : 'no messages');
+    if (!chatTitle || !messages) {
+      console.error('Invalid chat data:', { chatTitle, messages: !!messages });
+      return;
+    }
+    
+    // Add or update chat in collection
+    this.multiChatData.chats.set(chatTitle, {
+      messages: messages,
+      extractedAt: new Date().toISOString(),
+      messageCount: messages.length
+    });
+    
+    // Update totals
+    this.multiChatData.totalChats = this.multiChatData.chats.size;
+    this.multiChatData.totalMessages = Array.from(this.multiChatData.chats.values())
+      .reduce((total, chat) => total + chat.messageCount, 0);
+    
+    console.log('Chat added to collection. New totals:', {
+      totalChats: this.multiChatData.totalChats,
+      totalMessages: this.multiChatData.totalMessages
+    });
+    
+    this.saveMultiChatData();
+  }
+
+  updateMultiChatDisplay() {
+    console.log('updateMultiChatDisplay called');
+    const multiChatCount = document.getElementById('multiChatCount');
+    const multiChatMessages = document.getElementById('multiChatMessages');
+    
+    if (!multiChatCount || !multiChatMessages) {
+      console.error('Multi-chat display elements not found:', {
+        multiChatCount: !!multiChatCount,
+        multiChatMessages: !!multiChatMessages
+      });
+      return;
+    }
+    
+    multiChatCount.textContent = `${this.multiChatData.totalChats} chats collected`;
+    multiChatMessages.textContent = `${this.multiChatData.totalMessages} total messages`;
+    console.log('Multi-chat display updated:', this.multiChatData);
+  }
+
+  showMultiChatResults() {
+    const multiChatResults = document.getElementById('multiChatResults');
+    const resultsSection = document.getElementById('resultsSection');
+    const collectedChats = document.getElementById('collectedChats');
+    const multiChatTotal = document.getElementById('multiChatTotal');
+    
+    // Hide single chat results, show multi-chat results
+    resultsSection.style.display = 'none';
+    multiChatResults.style.display = 'block';
+    
+    // Update totals
+    multiChatTotal.textContent = `${this.multiChatData.totalChats} chats, ${this.multiChatData.totalMessages} messages`;
+    
+    // Clear and populate collected chats
+    collectedChats.innerHTML = '';
+    
+    if (this.multiChatData.chats.size === 0) {
+      collectedChats.innerHTML = '<div style="text-align: center; color: #6b7280; font-style: italic; padding: 20px;">No chats collected yet. Switch to different chats and extract messages.</div>';
+      return;
+    }
+    
+    Array.from(this.multiChatData.chats.entries()).forEach(([chatTitle, chatData]) => {
+      const chatItem = document.createElement('div');
+      chatItem.className = 'collected-chat-item';
+      
+      const extractedDate = new Date(chatData.extractedAt);
+      const timeAgo = this.getTimeAgo(extractedDate);
+      
+      chatItem.innerHTML = `
+        <div class="collected-chat-title">${this.escapeHtml(chatTitle)}</div>
+        <div class="collected-chat-meta">
+          <span>Extracted ${timeAgo}</span>
+          <span class="collected-chat-count">${chatData.messageCount} messages</span>
+        </div>
+        <div class="collected-chat-actions">
+          <button onclick="popupController.removeFromCollection('${this.escapeHtml(chatTitle)}')">Remove</button>
+          <button onclick="popupController.previewChatMessages('${this.escapeHtml(chatTitle)}')">Preview</button>
+        </div>
+      `;
+      
+      collectedChats.appendChild(chatItem);
+    });
+  }
+
+  removeFromCollection(chatTitle) {
+    this.multiChatData.chats.delete(chatTitle);
+    
+    // Update totals
+    this.multiChatData.totalChats = this.multiChatData.chats.size;
+    this.multiChatData.totalMessages = Array.from(this.multiChatData.chats.values())
+      .reduce((total, chat) => total + chat.messageCount, 0);
+    
+    this.updateMultiChatDisplay();
+    this.showMultiChatResults();
+    this.saveMultiChatData();
+    this.showTemporaryMessage(`Removed "${chatTitle}" from collection`);
+  }
+
+  previewChatMessages(chatTitle) {
+    const chatData = this.multiChatData.chats.get(chatTitle);
+    if (!chatData) return;
+    
+    // Show single chat results with this chat's data
+    this.currentMessages = chatData.messages;
+    this.currentChatTitle = chatTitle;
+    this.showResults(chatData.messages);
+    
+    document.getElementById('multiChatResults').style.display = 'none';
+    this.showTemporaryMessage(`Previewing messages from "${chatTitle}"`);
+  }
+
+  clearMultiChatCollection() {
+    if (this.multiChatData.totalChats === 0) {
+      this.showTemporaryMessage('No chats to clear', 'error');
+      return;
+    }
+    
+    this.multiChatData.chats.clear();
+    this.multiChatData.totalChats = 0;
+    this.multiChatData.totalMessages = 0;
+    
+    this.updateMultiChatDisplay();
+    this.saveMultiChatData();
+    
+    // Hide multi-chat results
+    document.getElementById('multiChatResults').style.display = 'none';
+    
+    this.showTemporaryMessage('Multi-chat collection cleared');
+  }
+
+  async exportMultiChatJSON() {
+    if (this.multiChatData.totalChats === 0) {
+      this.showTemporaryMessage('No chats to export', 'error');
+      return;
+    }
+    
+    const exportData = {
+      exportType: 'multi-chat',
+      exportedAt: new Date().toISOString(),
+      totalChats: this.multiChatData.totalChats,
+      totalMessages: this.multiChatData.totalMessages,
+      chats: {}
+    };
+    
+    // Convert Map to regular object for JSON export
+    this.multiChatData.chats.forEach((chatData, chatTitle) => {
+      exportData.chats[chatTitle] = chatData;
+    });
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whatsapp-multi-chat-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    this.showTemporaryMessage('Multi-chat JSON exported successfully');
+  }
+
+  async exportMultiChatCSV() {
+    if (this.multiChatData.totalChats === 0) {
+      this.showTemporaryMessage('No chats to export', 'error');
+      return;
+    }
+    
+    let csvContent = 'Chat Title,Timestamp,Sender,Message,Type,Direction\n';
+    
+    this.multiChatData.chats.forEach((chatData, chatTitle) => {
+      chatData.messages.forEach(message => {
+        const row = [
+          `"${chatTitle.replace(/"/g, '""')}"`,
+          `"${message.timestamp}"`,
+          `"${message.sender.replace(/"/g, '""')}"`,
+          `"${message.text.replace(/"/g, '""')}"`,
+          message.messageType,
+          message.isOutgoing ? 'Outgoing' : 'Incoming'
+        ].join(',');
+        csvContent += row + '\n';
+      });
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `whatsapp-multi-chat-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    this.showTemporaryMessage('Multi-chat CSV exported successfully');
+  }
+
+  async saveMultiChatData() {
+    try {
+      const dataToSave = {
+        multiChatMode: this.multiChatMode,
+        totalChats: this.multiChatData.totalChats,
+        totalMessages: this.multiChatData.totalMessages,
+        chats: Object.fromEntries(this.multiChatData.chats)
+      };
+      
+      await chrome.storage.local.set({ multiChatData: dataToSave });
+    } catch (error) {
+      console.error('Error saving multi-chat data:', error);
+    }
+  }
+
+  async loadMultiChatData() {
+    try {
+      const result = await chrome.storage.local.get('multiChatData');
+      if (result.multiChatData) {
+        const data = result.multiChatData;
+        
+        this.multiChatMode = data.multiChatMode || false;
+        this.multiChatData.totalChats = data.totalChats || 0;
+        this.multiChatData.totalMessages = data.totalMessages || 0;
+        this.multiChatData.chats = new Map(Object.entries(data.chats || {}));
+        
+        // Restore UI state
+        document.getElementById('multiChatMode').checked = this.multiChatMode;
+        this.toggleMultiChatMode(this.multiChatMode);
+      }
+    } catch (error) {
+      console.error('Error loading multi-chat data:', error);
+    }
+  }
+
+  getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
+  }
 }
 
 // Initialize popup when DOM is loaded
+// Initialize popup when DOM is ready
+let popupController;
 document.addEventListener('DOMContentLoaded', () => {
-  new PopupController();
+  popupController = new PopupController();
 }); 
