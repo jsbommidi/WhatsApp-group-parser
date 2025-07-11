@@ -107,10 +107,8 @@ Once messages are extracted:
 - **Timestamp**: When the message was sent
 - **Sender**: Who sent the message
 - **Message**: The message content
-- **Type**: Message type (text, image, audio, video, document, sticker, contact)
+- **Type**: Message type (text, image, audio, video, document, sticker)
 - **Direction**: Incoming or Outgoing
-- **Contact Name**: Name from contact cards (when applicable)
-- **Contact Phone**: Phone number from contact cards (when applicable)
 
 ## 🔧 Technical Details
 
@@ -121,7 +119,6 @@ Once messages are extracted:
 - **Audio**: Voice messages and audio files
 - **Document**: PDF, DOC, and other file attachments
 - **Sticker**: WhatsApp stickers
-- **Contact**: Shared contact cards with name and phone number extraction
 
 ### Browser Compatibility
 - Google Chrome (Recommended)
@@ -192,7 +189,6 @@ WhatsApp-group-parser/
 - Media messages (images, videos, audio)
 - Document attachments
 - Stickers
-- Contact cards with name and phone extraction
 - Group chats
 - Individual chats
 - Message timestamps
@@ -204,6 +200,7 @@ WhatsApp-group-parser/
 - Voice message transcriptions
 - Media file downloads
 - Live location sharing
+- Contact cards
 
 ## 🔄 Updates
 
