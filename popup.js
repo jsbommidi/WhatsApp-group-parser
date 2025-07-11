@@ -32,6 +32,9 @@ class PopupController {
     // Auto-extract chat list
     this.autoExtractChats = new Set(); // Set of chat titles to auto-extract
     
+    // Track if actions are user-initiated
+    this.isUserAction = false;
+    
     this.init();
   }
 
@@ -62,7 +65,11 @@ class PopupController {
       const exportMultiCSV = document.getElementById('exportMultiCSV');
       
       if (multiChatMode) {
-        multiChatMode.addEventListener('change', (e) => this.toggleMultiChatMode(e.target.checked));
+        multiChatMode.addEventListener('change', (e) => {
+          this.isUserAction = true;
+          this.toggleMultiChatMode(e.target.checked);
+          this.isUserAction = false;
+        });
         console.log('Multi-chat mode event listener added');
       } else {
         console.error('multiChatMode element not found');
@@ -432,9 +439,15 @@ class PopupController {
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message-item';
       
+      // Enhanced text display for contact messages
+      let displayText = msg.text;
+      if (msg.messageType === 'contact' && msg.contactInfo) {
+        displayText = `📞 ${msg.contactInfo.name || 'Contact'}${msg.contactInfo.phone ? ` (${msg.contactInfo.phone})` : ''}`;
+      }
+      
       messageDiv.innerHTML = `
         <div class="message-sender">${this.escapeHtml(msg.sender)}</div>
-        <div class="message-text">${this.escapeHtml(msg.text.substring(0, 100))}${msg.text.length > 100 ? '...' : ''}</div>
+        <div class="message-text">${this.escapeHtml(displayText.substring(0, 100))}${displayText.length > 100 ? '...' : ''}</div>
         <div class="message-meta">
           <span class="message-time">${this.escapeHtml(msg.timestamp)}</span>
           <span class="message-type">${msg.messageType}</span>
@@ -1179,7 +1192,8 @@ class PopupController {
       }
       
       // Only show message if this is a user action, not during loading
-      if (document.getElementById('multiChatMode').checked === enabled) {
+      const checkbox = document.getElementById('multiChatMode');
+      if (checkbox && checkbox.checked === enabled && this.isUserAction) {
         this.showTemporaryMessage('Multi-chat mode enabled. Switch between chats and extract messages.');
       }
       console.log('Multi-chat mode enabled');
@@ -1192,7 +1206,8 @@ class PopupController {
       }
       
       // Only show message if this is a user action, not during loading
-      if (document.getElementById('multiChatMode').checked === enabled) {
+      const checkbox = document.getElementById('multiChatMode');
+      if (checkbox && checkbox.checked === enabled && this.isUserAction) {
         this.showTemporaryMessage('Multi-chat mode disabled.');
       }
       console.log('Multi-chat mode disabled');
