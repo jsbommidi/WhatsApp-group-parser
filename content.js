@@ -6,22 +6,70 @@ class WhatsAppParser {
     this.isExtractingAll = false;
   }
 
-  // Extract current chat title
+  // Extract current chat title with enhanced reliability
   getChatTitle() {
     const titleSelectors = [
+      // Main chat title selectors (ordered by reliability)
       '[data-testid="conversation-info-header-chat-title"]',
+      'header [data-testid="conversation-title"]',
+      'header span[title]',
       '._2_7_Y span[title]',
       '.p357zi0d.ac2vgrno.ln8gz9je span',
-      'header span[title]'
+      'header .copyable-text span',
+      'header ._3Tw4- span',
+      'header ._315-i span'
     ];
 
+    let chatTitle = '';
+    
     for (const selector of titleSelectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        return element.textContent || element.title || '';
+      const elements = document.querySelectorAll(selector);
+      for (const element of elements) {
+        const title = element.textContent?.trim() || element.title?.trim() || '';
+        if (title && title !== 'WhatsApp' && title.length > 0) {
+          chatTitle = title;
+          break;
+        }
+      }
+      if (chatTitle) break;
+    }
+    
+    // Fallback: try to get from document title
+    if (!chatTitle && document.title && document.title !== 'WhatsApp') {
+      const titleMatch = document.title.match(/^(.+?) - WhatsApp$/);
+      if (titleMatch) {
+        chatTitle = titleMatch[1].trim();
       }
     }
-    return 'Unknown Chat';
+    
+    // Fallback: try to get from URL or other indicators
+    if (!chatTitle) {
+      const url = window.location.href;
+      const chatMatch = url.match(/\/chat\/([^\/]+)/);
+      if (chatMatch) {
+        chatTitle = `Chat-${chatMatch[1].substring(0, 10)}`;
+      } else {
+        chatTitle = `Unknown Chat ${new Date().toISOString().substring(11, 19)}`;
+      }
+    }
+    
+    // Validate and clean the title
+    if (typeof chatTitle !== 'string') {
+      chatTitle = 'Unknown Chat';
+    }
+    
+    chatTitle = chatTitle.trim();
+    if (chatTitle.length === 0) {
+      chatTitle = 'Empty Chat Name';
+    }
+    
+    // Limit title length
+    if (chatTitle.length > 100) {
+      chatTitle = chatTitle.substring(0, 100) + '...';
+    }
+    
+    console.log('Extracted chat title:', chatTitle);
+    return chatTitle;
   }
 
   // Extract messages from the current view

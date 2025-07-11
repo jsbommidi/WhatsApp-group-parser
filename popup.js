@@ -8,6 +8,7 @@ class PopupController {
     this.autoExtractActive = false;
     this.autoExtractCount = 0;
     this.nextExtractTime = null;
+    // Filters should always start disabled
     this.currentFilters = {
       enabled: false,
       textFilter: '',
@@ -32,6 +33,12 @@ class PopupController {
   }
 
   async init() {
+    // Load saved settings first before binding events
+    await this.loadMultiChatData();
+    await this.loadAutoExtractSettings();
+    // Note: Filter settings are NOT loaded - filters always start disabled
+    await this.clearAnyExistingFilterSettings();
+    this.initializeFilterDefaults();
     this.bindEvents();
     await this.checkWhatsAppStatus();
   }
@@ -115,10 +122,7 @@ class PopupController {
       }
     });
 
-    // Load saved settings
-    this.loadAutoExtractSettings();
-    this.loadFilterSettings();
-    this.loadMultiChatData();
+    // Settings are now loaded in init() before bindEvents() is called
   }
 
   async checkWhatsAppStatus() {
@@ -255,6 +259,13 @@ class PopupController {
       this.allMessages = data.messages;
       this.currentChatTitle = data.chatTitle;
       
+      // If multi-chat mode is enabled, add to collection
+      console.log('Extract All Complete - Multi-chat mode status:', this.multiChatMode);
+      if (this.multiChatMode) {
+        console.log('Adding extract all results to multi-chat collection:', data.chatTitle, data.messages.length);
+        this.addToMultiChatCollection(data.chatTitle, data.messages);
+      }
+      
       // Apply filters if enabled
       const messagesToShow = this.currentFilters.enabled ? 
         this.filterMessages(this.allMessages) : this.allMessages;
@@ -267,6 +278,12 @@ class PopupController {
         this.updateStatus('success', `Extraction complete: ${data.messages.length} messages, ${messagesToShow.length} match filters`);
       } else {
         this.updateStatus('success', `Extraction complete: ${data.messages.length} messages`);
+      }
+      
+      // Update multi-chat display if in multi-chat mode
+      if (this.multiChatMode) {
+        this.updateMultiChatDisplay();
+        this.showTemporaryMessage(`Added "${data.chatTitle}" to collection (${data.messages.length} messages)`);
       }
       
       this.hideProgress();
@@ -538,8 +555,7 @@ class PopupController {
     this.showResults(this.filteredMessages);
     this.showFilterStatus(this.filteredMessages.length);
     
-    // Save filter settings
-    this.saveFilterSettings();
+    // Note: Filter settings are NOT saved - they reset each session
     
     this.showTemporaryMessage('Filters applied successfully');
   }
@@ -849,67 +865,52 @@ class PopupController {
     filterStatus.style.display = 'block';
   }
 
-  async saveFilterSettings() {
+  // Initialize filter UI to default disabled state
+  initializeFilterDefaults() {
+    // Ensure main filter checkbox is unchecked
+    document.getElementById('enableFilters').checked = false;
+    
+    // Ensure filter options are hidden
+    this.toggleFilterOptions(false);
+    
+    // Reset all filter inputs to defaults
+    document.getElementById('textFilter').value = '';
+    document.getElementById('numberFilter').value = '';
+    
+    // Set simple mode as default
+    document.querySelector('input[name="textMode"][value="simple"]').checked = true;
+    this.toggleFilterHelp('simple');
+    
+    // Ensure time filter is disabled
+    document.getElementById('enableTimeFilter').checked = false;
+    this.toggleTimeFilterOptions(false);
+    
+    // Clear all time inputs
+    document.getElementById('startDate').value = '';
+    document.getElementById('startTime').value = '';
+    document.getElementById('endDate').value = '';
+    document.getElementById('endTime').value = '';
+    
+    // Remove active states from quick time buttons
+    document.querySelectorAll('.quick-time-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Hide filter status
+    document.getElementById('filterStatus').style.display = 'none';
+  }
+
+  // Clear any existing filter settings from storage
+  async clearAnyExistingFilterSettings() {
     try {
-      await chrome.storage.local.set({
-        filterSettings: this.currentFilters
-      });
+      await chrome.storage.local.remove('filterSettings');
     } catch (error) {
-      console.error('Error saving filter settings:', error);
+      console.error('Error clearing filter settings:', error);
     }
   }
 
-  async loadFilterSettings() {
-    try {
-      const result = await chrome.storage.local.get('filterSettings');
-      if (result.filterSettings) {
-        const settings = result.filterSettings;
-        
-        // Restore filter settings
-        document.getElementById('enableFilters').checked = settings.enabled || false;
-        this.toggleFilterOptions(settings.enabled || false);
-        
-        if (settings.textFilter) {
-          document.getElementById('textFilter').value = settings.textFilter;
-        }
-        
-        if (settings.numberFilter) {
-          document.getElementById('numberFilter').value = settings.numberFilter;
-        }
-        
-        if (settings.textMode) {
-          const modeElement = document.querySelector(`input[name="textMode"][value="${settings.textMode}"]`);
-          if (modeElement) {
-            modeElement.checked = true;
-            this.toggleFilterHelp(settings.textMode);
-          } else {
-            // Fallback for old settings
-            document.querySelector('input[name="textMode"][value="simple"]').checked = true;
-            this.toggleFilterHelp('simple');
-          }
-        }
-        
-        document.getElementById('enableTimeFilter').checked = settings.timeFilter || false;
-        this.toggleTimeFilterOptions(settings.timeFilter || false);
-        
-        if (settings.startDate) {
-          const startDate = new Date(settings.startDate);
-          document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
-          document.getElementById('startTime').value = startDate.toTimeString().slice(0, 5);
-        }
-        
-        if (settings.endDate) {
-          const endDate = new Date(settings.endDate);
-          document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
-          document.getElementById('endTime').value = endDate.toTimeString().slice(0, 5);
-        }
-        
-        this.currentFilters = settings;
-      }
-    } catch (error) {
-      console.error('Error loading filter settings:', error);
-    }
-  }
+  // Filter settings are intentionally not saved/loaded
+  // Filters should always start disabled for each session
 
   async startAutoExtract() {
     if (this.autoExtractActive) {
@@ -1106,6 +1107,10 @@ class PopupController {
   toggleMultiChatMode(enabled) {
     console.log('toggleMultiChatMode called with enabled:', enabled);
     this.multiChatMode = enabled;
+    
+    // Save immediately when mode changes
+    this.saveMultiChatDataWithRetry();
+    
     const multiChatStatus = document.getElementById('multiChatStatus');
     
     if (!multiChatStatus) {
@@ -1116,42 +1121,90 @@ class PopupController {
     if (enabled) {
       multiChatStatus.style.display = 'block';
       this.updateMultiChatDisplay();
-      this.showTemporaryMessage('Multi-chat mode enabled. Switch between chats and extract messages.');
+      // Only show message if this is a user action, not during loading
+      if (document.getElementById('multiChatMode').checked === enabled) {
+        this.showTemporaryMessage('Multi-chat mode enabled. Switch between chats and extract messages.');
+      }
       console.log('Multi-chat mode enabled');
     } else {
       multiChatStatus.style.display = 'none';
-      this.showTemporaryMessage('Multi-chat mode disabled.');
+      // Only show message if this is a user action, not during loading
+      if (document.getElementById('multiChatMode').checked === enabled) {
+        this.showTemporaryMessage('Multi-chat mode disabled.');
+      }
       console.log('Multi-chat mode disabled');
     }
-    
-    this.saveMultiChatData();
   }
 
   addToMultiChatCollection(chatTitle, messages) {
     console.log('addToMultiChatCollection called:', chatTitle, messages ? messages.length : 'no messages');
-    if (!chatTitle || !messages) {
-      console.error('Invalid chat data:', { chatTitle, messages: !!messages });
+    
+    // Enhanced validation
+    if (!chatTitle || typeof chatTitle !== 'string' || chatTitle.trim() === '') {
+      console.error('Invalid chat title:', chatTitle);
+      this.showTemporaryMessage('Cannot add chat: Invalid chat title', 'error');
       return;
     }
     
-    // Add or update chat in collection
-    this.multiChatData.chats.set(chatTitle, {
-      messages: messages,
-      extractedAt: new Date().toISOString(),
-      messageCount: messages.length
-    });
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      console.error('Invalid messages data:', { messages: !!messages, isArray: Array.isArray(messages), length: messages?.length });
+      this.showTemporaryMessage('Cannot add chat: No messages found', 'error');
+      return;
+    }
     
-    // Update totals
-    this.multiChatData.totalChats = this.multiChatData.chats.size;
-    this.multiChatData.totalMessages = Array.from(this.multiChatData.chats.values())
-      .reduce((total, chat) => total + chat.messageCount, 0);
+    // Clean and validate chat title
+    const cleanChatTitle = chatTitle.trim();
+    if (cleanChatTitle.length > 200) {
+      console.warn('Chat title too long, truncating:', cleanChatTitle.length);
+      chatTitle = cleanChatTitle.substring(0, 200) + '...';
+    } else {
+      chatTitle = cleanChatTitle;
+    }
     
-    console.log('Chat added to collection. New totals:', {
-      totalChats: this.multiChatData.totalChats,
-      totalMessages: this.multiChatData.totalMessages
-    });
+    // Validate messages structure
+    const validMessages = messages.filter(msg => 
+      msg && typeof msg === 'object' && 
+      msg.sender && msg.text && msg.timestamp
+    );
     
-    this.saveMultiChatData();
+    if (validMessages.length === 0) {
+      console.error('No valid messages found');
+      this.showTemporaryMessage('Cannot add chat: No valid messages', 'error');
+      return;
+    }
+    
+    if (validMessages.length !== messages.length) {
+      console.warn(`Filtered out ${messages.length - validMessages.length} invalid messages`);
+    }
+    
+    try {
+      // Add or update chat in collection
+      this.multiChatData.chats.set(chatTitle, {
+        messages: validMessages,
+        extractedAt: new Date().toISOString(),
+        messageCount: validMessages.length,
+        originalMessageCount: messages.length
+      });
+      
+      // Update totals
+      this.multiChatData.totalChats = this.multiChatData.chats.size;
+      this.multiChatData.totalMessages = Array.from(this.multiChatData.chats.values())
+        .reduce((total, chat) => total + chat.messageCount, 0);
+      
+      console.log('Chat added to collection. New totals:', {
+        totalChats: this.multiChatData.totalChats,
+        totalMessages: this.multiChatData.totalMessages,
+        chatTitle: chatTitle,
+        validMessages: validMessages.length
+      });
+      
+      // Save with retry mechanism
+      this.saveMultiChatDataWithRetry();
+      
+    } catch (error) {
+      console.error('Error adding chat to collection:', error);
+      this.showTemporaryMessage('Failed to add chat to collection', 'error');
+    }
   }
 
   updateMultiChatDisplay() {
@@ -1226,7 +1279,7 @@ class PopupController {
     
     this.updateMultiChatDisplay();
     this.showMultiChatResults();
-    this.saveMultiChatData();
+    this.saveMultiChatDataWithRetry();
     this.showTemporaryMessage(`Removed "${chatTitle}" from collection`);
   }
 
@@ -1254,7 +1307,7 @@ class PopupController {
     this.multiChatData.totalMessages = 0;
     
     this.updateMultiChatDisplay();
-    this.saveMultiChatData();
+    this.saveMultiChatDataWithRetry();
     
     // Hide multi-chat results
     document.getElementById('multiChatResults').style.display = 'none';
@@ -1337,32 +1390,149 @@ class PopupController {
         multiChatMode: this.multiChatMode,
         totalChats: this.multiChatData.totalChats,
         totalMessages: this.multiChatData.totalMessages,
-        chats: Object.fromEntries(this.multiChatData.chats)
+        chats: Object.fromEntries(this.multiChatData.chats),
+        lastUpdated: new Date().toISOString()
       };
       
+      console.log('Saving multi-chat data:', dataToSave);
       await chrome.storage.local.set({ multiChatData: dataToSave });
+      console.log('Multi-chat data saved successfully');
     } catch (error) {
       console.error('Error saving multi-chat data:', error);
+      throw error; // Re-throw for retry mechanism
+    }
+  }
+
+  async saveMultiChatDataWithRetry(maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.saveMultiChatData();
+        console.log(`Multi-chat data saved successfully on attempt ${attempt}`);
+        return; // Success, exit retry loop
+      } catch (error) {
+        console.error(`Save attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          console.error('All save attempts failed, data may be lost');
+          this.showTemporaryMessage('Failed to save data - please try again', 'error');
+          return;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const delay = Math.pow(2, attempt - 1) * 100; // 100ms, 200ms, 400ms
+        console.log(`Retrying save in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
 
   async loadMultiChatData() {
     try {
+      console.log('Loading multi-chat data...');
       const result = await chrome.storage.local.get('multiChatData');
+      console.log('Loaded data from storage:', result);
+      
       if (result.multiChatData) {
         const data = result.multiChatData;
         
+        // Validate data integrity
+        if (!this.validateMultiChatData(data)) {
+          console.warn('Invalid multi-chat data found, resetting...');
+          await this.resetMultiChatData();
+          return;
+        }
+        
         this.multiChatMode = data.multiChatMode || false;
-        this.multiChatData.totalChats = data.totalChats || 0;
-        this.multiChatData.totalMessages = data.totalMessages || 0;
-        this.multiChatData.chats = new Map(Object.entries(data.chats || {}));
+        
+        // Restore chats with validation
+        const validChats = new Map();
+        const chatsData = data.chats || {};
+        
+        Object.entries(chatsData).forEach(([chatTitle, chatData]) => {
+          if (this.isValidChatData(chatTitle, chatData)) {
+            validChats.set(chatTitle, chatData);
+          } else {
+            console.warn('Skipping invalid chat data:', chatTitle);
+          }
+        });
+        
+        this.multiChatData.chats = validChats;
+        
+        // Recalculate totals from valid data
+        this.multiChatData.totalChats = validChats.size;
+        this.multiChatData.totalMessages = Array.from(validChats.values())
+          .reduce((total, chat) => total + (chat.messageCount || 0), 0);
+        
+        console.log('Restored multi-chat data:', {
+          mode: this.multiChatMode,
+          totalChats: this.multiChatData.totalChats,
+          totalMessages: this.multiChatData.totalMessages,
+          chats: Array.from(this.multiChatData.chats.keys()),
+          lastUpdated: data.lastUpdated
+        });
+        
+        // If data was cleaned up, save the corrected version
+        if (validChats.size !== Object.keys(chatsData).length) {
+          console.log('Data was cleaned up, saving corrected version...');
+          await this.saveMultiChatDataWithRetry();
+        }
         
         // Restore UI state
-        document.getElementById('multiChatMode').checked = this.multiChatMode;
-        this.toggleMultiChatMode(this.multiChatMode);
+        const checkbox = document.getElementById('multiChatMode');
+        if (checkbox) {
+          checkbox.checked = this.multiChatMode;
+          this.toggleMultiChatMode(this.multiChatMode);
+        } else {
+          console.error('multiChatMode checkbox not found when restoring state');
+        }
+      } else {
+        console.log('No multi-chat data found in storage');
       }
     } catch (error) {
       console.error('Error loading multi-chat data:', error);
+      await this.resetMultiChatData();
+    }
+  }
+
+  validateMultiChatData(data) {
+    if (!data || typeof data !== 'object') return false;
+    if (typeof data.multiChatMode !== 'boolean') return false;
+    if (typeof data.totalChats !== 'number' || data.totalChats < 0) return false;
+    if (typeof data.totalMessages !== 'number' || data.totalMessages < 0) return false;
+    if (!data.chats || typeof data.chats !== 'object') return false;
+    return true;
+  }
+
+  isValidChatData(chatTitle, chatData) {
+    if (!chatTitle || typeof chatTitle !== 'string' || chatTitle.trim() === '') return false;
+    if (!chatData || typeof chatData !== 'object') return false;
+    if (!Array.isArray(chatData.messages)) return false;
+    if (typeof chatData.messageCount !== 'number' || chatData.messageCount < 0) return false;
+    if (!chatData.extractedAt || typeof chatData.extractedAt !== 'string') return false;
+    
+    // Validate message count matches array length
+    if (chatData.messages.length !== chatData.messageCount) {
+      console.warn(`Message count mismatch for ${chatTitle}: ${chatData.messages.length} vs ${chatData.messageCount}`);
+      return false;
+    }
+    
+    return true;
+  }
+
+  async resetMultiChatData() {
+    console.log('Resetting multi-chat data to defaults...');
+    this.multiChatMode = false;
+    this.multiChatData = {
+      chats: new Map(),
+      totalMessages: 0,
+      totalChats: 0
+    };
+    
+    try {
+      await chrome.storage.local.remove('multiChatData');
+      console.log('Corrupted multi-chat data removed from storage');
+    } catch (error) {
+      console.error('Error removing corrupted data:', error);
     }
   }
 
@@ -1379,6 +1549,17 @@ class PopupController {
     if (diffDays < 7) return `${diffDays}d ago`;
     
     return date.toLocaleDateString();
+  }
+
+  // Debug function to check storage manually
+  async debugStorage() {
+    try {
+      const result = await chrome.storage.local.get(null);
+      console.log('FULL STORAGE DEBUG:', result);
+      return result;
+    } catch (error) {
+      console.error('Error checking storage:', error);
+    }
   }
 }
 
