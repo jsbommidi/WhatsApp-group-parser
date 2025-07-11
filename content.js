@@ -64,8 +64,8 @@ class WhatsAppParser {
     }
     
     // Limit title length
-    if (chatTitle.length > 100) {
-      chatTitle = chatTitle.substring(0, 100) + '...';
+    if (chatTitle.length > 40) {
+      chatTitle = chatTitle.substring(0, 40) + ' and more';
     }
     
     console.log('Extracted chat title:', chatTitle);

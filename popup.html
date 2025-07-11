@@ -179,6 +179,26 @@
                     </div>
                     <div id="autoExtractCount" class="extract-count">0 extractions completed</div>
                 </div>
+
+                <!-- Multi-Chat Auto-Extract -->
+                <div id="multiChatAutoExtract" class="multi-chat-auto-extract" style="display: none;">
+                    <h5>Multi-Chat Auto-Extract</h5>
+                    <div class="current-chat-info">
+                        <span class="current-chat-label">Current Chat:</span>
+                        <span id="currentChatName" class="current-chat-name">Loading...</span>
+                        <button id="addCurrentChat" class="btn btn-add-chat">Add to Auto-Extract</button>
+                    </div>
+                    
+                    <div id="autoExtractChatList" class="auto-extract-chat-list">
+                        <div class="chat-list-header">
+                            <span>Chats to Auto-Extract:</span>
+                            <span id="autoExtractChatCount" class="chat-count">0 chats</span>
+                        </div>
+                        <div id="autoExtractChats" class="auto-extract-chats">
+                            <div class="no-chats-message">No chats added yet. Add current chat or switch to other chats to add them.</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="progressSection" class="progress-section" style="display: none;">

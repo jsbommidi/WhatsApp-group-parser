@@ -29,6 +29,9 @@ class PopupController {
       totalChats: 0
     };
     
+    // Auto-extract chat list
+    this.autoExtractChats = new Set(); // Set of chat titles to auto-extract
+    
     this.init();
   }
 
@@ -36,6 +39,7 @@ class PopupController {
     // Load saved settings first before binding events
     await this.loadMultiChatData();
     await this.loadAutoExtractSettings();
+    await this.loadAutoExtractChats();
     // Note: Filter settings are NOT loaded - filters always start disabled
     await this.clearAnyExistingFilterSettings();
     this.initializeFilterDefaults();
@@ -94,6 +98,18 @@ class PopupController {
     // Auto-extract buttons
     document.getElementById('startAutoExtract').addEventListener('click', () => this.startAutoExtract());
     document.getElementById('stopAutoExtract').addEventListener('click', () => this.stopAutoExtract());
+    
+    // Multi-chat auto-extract controls
+    try {
+      const addCurrentChat = document.getElementById('addCurrentChat');
+      if (addCurrentChat) {
+        addCurrentChat.addEventListener('click', () => this.addCurrentChatToAutoExtract());
+      } else {
+        console.error('addCurrentChat element not found');
+      }
+    } catch (error) {
+      console.error('Error binding auto-extract chat events:', error);
+    }
 
     // Filter controls
     document.getElementById('enableFilters').addEventListener('change', (e) => this.toggleFilterOptions(e.target.checked));
@@ -143,6 +159,7 @@ class PopupController {
         this.currentChatTitle = response.chatTitle;
         this.showMainContent();
         this.updateChatInfo(response.chatTitle);
+        this.updateCurrentChatDisplay(response.chatTitle);
         this.updateStatus('ready', 'Ready to extract messages');
       } else {
         this.updateStatus('error', 'Could not connect to WhatsApp');
@@ -952,6 +969,12 @@ class PopupController {
     document.getElementById('startAutoExtract').style.display = 'none';
     document.getElementById('stopAutoExtract').style.display = 'block';
 
+    // Hide multi-chat auto-extract panel when auto-extract is active
+    const multiChatAutoExtract = document.getElementById('multiChatAutoExtract');
+    if (multiChatAutoExtract) {
+      multiChatAutoExtract.style.display = 'none';
+    }
+
     // Initial extraction
     this.performAutoExtraction();
 
@@ -983,6 +1006,14 @@ class PopupController {
     document.getElementById('startAutoExtract').style.display = 'block';
     document.getElementById('stopAutoExtract').style.display = 'none';
 
+    // Show multi-chat auto-extract panel if multi-chat mode is enabled
+    const multiChatAutoExtract = document.getElementById('multiChatAutoExtract');
+    if (multiChatAutoExtract && this.multiChatMode) {
+      multiChatAutoExtract.style.display = 'block';
+      this.updateCurrentChatDisplay(this.currentChatTitle);
+      this.updateAutoExtractChatList();
+    }
+
     this.updateStatus('ready', 'Auto-extract stopped');
     
     // Clear saved settings
@@ -998,6 +1029,13 @@ class PopupController {
         this.allMessages = response.messages;
         this.currentChatTitle = response.chatTitle;
         
+        // If multi-chat mode is enabled, add to collection
+        console.log('Auto-extract - Multi-chat mode status:', this.multiChatMode);
+        if (this.multiChatMode) {
+          console.log('Adding auto-extracted messages to multi-chat collection:', response.chatTitle, response.messages.length);
+          this.addToMultiChatCollection(response.chatTitle, response.messages);
+        }
+        
         // Apply filters if enabled
         const messagesToShow = this.currentFilters.enabled ? 
           this.filterMessages(this.allMessages) : this.allMessages;
@@ -1005,8 +1043,11 @@ class PopupController {
         this.currentMessages = messagesToShow;
         
         // Update auto-extract status
-        document.getElementById('autoExtractCount').textContent = 
-          `${this.autoExtractCount} extractions completed`;
+        let statusText = `${this.autoExtractCount} extractions completed`;
+        if (this.multiChatMode) {
+          statusText += ` (${this.multiChatData.totalChats} chats collected)`;
+        }
+        document.getElementById('autoExtractCount').textContent = statusText;
         
         // Show results if we have messages
         if (messagesToShow.length > 0) {
@@ -1016,13 +1057,20 @@ class PopupController {
           }
         }
 
+        // Update multi-chat display if in multi-chat mode
+        if (this.multiChatMode) {
+          this.updateMultiChatDisplay();
+        }
+
         // Log to background for potential storage/export
         chrome.runtime.sendMessage({
           action: 'autoExtractionComplete',
           data: {
             timestamp: new Date().toISOString(),
             messageCount: response.messages.length,
-            chatTitle: response.chatTitle
+            chatTitle: response.chatTitle,
+            multiChatMode: this.multiChatMode,
+            totalChatsCollected: this.multiChatData.totalChats
           }
         });
       }
@@ -1112,6 +1160,7 @@ class PopupController {
     this.saveMultiChatDataWithRetry();
     
     const multiChatStatus = document.getElementById('multiChatStatus');
+    const multiChatAutoExtract = document.getElementById('multiChatAutoExtract');
     
     if (!multiChatStatus) {
       console.error('multiChatStatus element not found');
@@ -1121,6 +1170,14 @@ class PopupController {
     if (enabled) {
       multiChatStatus.style.display = 'block';
       this.updateMultiChatDisplay();
+      
+      // Show multi-chat auto-extract panel if auto-extract is not active
+      if (multiChatAutoExtract && !this.autoExtractActive) {
+        multiChatAutoExtract.style.display = 'block';
+        this.updateCurrentChatDisplay(this.currentChatTitle);
+        this.updateAutoExtractChatList();
+      }
+      
       // Only show message if this is a user action, not during loading
       if (document.getElementById('multiChatMode').checked === enabled) {
         this.showTemporaryMessage('Multi-chat mode enabled. Switch between chats and extract messages.');
@@ -1128,6 +1185,12 @@ class PopupController {
       console.log('Multi-chat mode enabled');
     } else {
       multiChatStatus.style.display = 'none';
+      
+      // Hide multi-chat auto-extract panel
+      if (multiChatAutoExtract) {
+        multiChatAutoExtract.style.display = 'none';
+      }
+      
       // Only show message if this is a user action, not during loading
       if (document.getElementById('multiChatMode').checked === enabled) {
         this.showTemporaryMessage('Multi-chat mode disabled.');
@@ -1154,9 +1217,9 @@ class PopupController {
     
     // Clean and validate chat title
     const cleanChatTitle = chatTitle.trim();
-    if (cleanChatTitle.length > 200) {
+    if (cleanChatTitle.length > 40) {
       console.warn('Chat title too long, truncating:', cleanChatTitle.length);
-      chatTitle = cleanChatTitle.substring(0, 200) + '...';
+      chatTitle = cleanChatTitle.substring(0, 40) + ' and more';
     } else {
       chatTitle = cleanChatTitle;
     }
@@ -1533,6 +1596,113 @@ class PopupController {
       console.log('Corrupted multi-chat data removed from storage');
     } catch (error) {
       console.error('Error removing corrupted data:', error);
+    }
+  }
+
+  // Update current chat display in auto-extract panel
+  updateCurrentChatDisplay(chatTitle) {
+    const currentChatName = document.getElementById('currentChatName');
+    if (currentChatName && chatTitle) {
+      currentChatName.textContent = chatTitle;
+    }
+  }
+
+  // Add current chat to auto-extract list
+  addCurrentChatToAutoExtract() {
+    if (!this.currentChatTitle) {
+      this.showTemporaryMessage('No current chat detected', 'error');
+      return;
+    }
+
+    if (this.autoExtractChats.has(this.currentChatTitle)) {
+      this.showTemporaryMessage('Chat already in auto-extract list', 'error');
+      return;
+    }
+
+    this.autoExtractChats.add(this.currentChatTitle);
+    this.updateAutoExtractChatList();
+    this.saveAutoExtractChats();
+    this.showTemporaryMessage(`Added "${this.currentChatTitle}" to auto-extract list`);
+  }
+
+  // Remove chat from auto-extract list
+  removeChatFromAutoExtract(chatTitle) {
+    console.log('Removing chat from auto-extract:', chatTitle);
+    const wasRemoved = this.autoExtractChats.delete(chatTitle);
+    console.log('Chat removed successfully:', wasRemoved);
+    
+    if (wasRemoved) {
+      this.updateAutoExtractChatList();
+      this.saveAutoExtractChats();
+      this.showTemporaryMessage(`Removed "${chatTitle}" from auto-extract list`);
+    } else {
+      console.error('Failed to remove chat from auto-extract list');
+      this.showTemporaryMessage('Failed to remove chat', 'error');
+    }
+  }
+
+  // Update the auto-extract chat list display
+  updateAutoExtractChatList() {
+    console.log('Updating auto-extract chat list, current chats:', Array.from(this.autoExtractChats));
+    const autoExtractChats = document.getElementById('autoExtractChats');
+    const autoExtractChatCount = document.getElementById('autoExtractChatCount');
+    
+    if (!autoExtractChats || !autoExtractChatCount) {
+      console.error('Auto-extract chat elements not found');
+      return;
+    }
+
+    // Update count
+    autoExtractChatCount.textContent = `${this.autoExtractChats.size} chats`;
+
+    // Clear and populate list
+    autoExtractChats.innerHTML = '';
+
+    if (this.autoExtractChats.size === 0) {
+      autoExtractChats.innerHTML = '<div class="no-chats-message">No chats added yet. Add current chat or switch to other chats to add them.</div>';
+      return;
+    }
+
+    Array.from(this.autoExtractChats).forEach(chatTitle => {
+      const chatItem = document.createElement('div');
+      chatItem.className = 'auto-extract-chat-item';
+      
+      const chatNameSpan = document.createElement('span');
+      chatNameSpan.className = 'auto-extract-chat-name';
+      chatNameSpan.textContent = chatTitle;
+      
+      const removeButton = document.createElement('button');
+      removeButton.className = 'btn-remove-chat';
+      removeButton.textContent = 'Remove';
+      removeButton.addEventListener('click', () => this.removeChatFromAutoExtract(chatTitle));
+      
+      chatItem.appendChild(chatNameSpan);
+      chatItem.appendChild(removeButton);
+      autoExtractChats.appendChild(chatItem);
+    });
+  }
+
+  // Save auto-extract chat list to storage
+  async saveAutoExtractChats() {
+    try {
+      await chrome.storage.local.set({
+        autoExtractChats: Array.from(this.autoExtractChats)
+      });
+    } catch (error) {
+      console.error('Error saving auto-extract chats:', error);
+    }
+  }
+
+  // Load auto-extract chat list from storage
+  async loadAutoExtractChats() {
+    try {
+      const result = await chrome.storage.local.get('autoExtractChats');
+      if (result.autoExtractChats) {
+        this.autoExtractChats = new Set(result.autoExtractChats);
+        this.updateAutoExtractChatList();
+      }
+    } catch (error) {
+      console.error('Error loading auto-extract chats:', error);
     }
   }
 
